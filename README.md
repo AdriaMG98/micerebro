@@ -251,7 +251,8 @@ La estructura (carpetas con `index.md`, `log.md`, fichas YAML sobre Markdown, `o
 índice raíz) sigue el espíritu del **Open Knowledge Format** (OKF), una especificación abierta
 de Google Cloud Platform: <https://github.com/GoogleCloudPlatform/open-knowledge-format>. Este
 repositorio es una implementación independiente y no incluye texto ni código de esa especificación;
-consúltala allí.
+consúltala allí. No está afiliado a Google ni avalado por Google; la especificación OKF es suya
+(licencia Apache-2.0) y aquí solo se usa como referencia de formato.
 
 ## Licencia
 
