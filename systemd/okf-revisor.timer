@@ -1,0 +1,10 @@
+[Unit]
+Description=Revisa los borradores de MiCerebro cada hora
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,4 @@
+name: enchufe
+version: 1.0.0
+description: "Enchufe — memoria de Hermes en sintonía con okf (MiCerebro): busca y guarda en okf (y gbrain si hay URL+token)."
+# Sin requires_env: todo es opcional y se lee de entorno (ver README).
