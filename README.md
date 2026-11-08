@@ -257,6 +257,35 @@ Configuración, solo por entorno:
 
 Los secretos (token de gbrain, etc.) van en el entorno del servicio, nunca en el repo.
 
+## Traer tu memoria de otro sitio (`okf-migrar`)
+
+Copia memoria que ya tienes al formato MiCerebro. **Siempre copia**: no borra ni toca el origen,
+no pisa ningún destino (si existe, `-2`, `-3`…) y no escribe fuera de la raíz del cerebro ni
+sigue enlaces simbólicos. Primero inventario, después aplicar:
+
+```bash
+node okf/okf-migrar.mjs --origen <ruta> [--tipo libreta|carpeta|planes|auto] [--root <MiCerebro>] --dry-run
+node okf/okf-migrar.mjs --origen <ruta> [--tipo ...] [--root <MiCerebro>] --aplicar   # tras revisar el inventario
+```
+
+| `--tipo` | Origen | Qué hace |
+|---|---|---|
+| `libreta` | `MEMORY.md` / `USER.md` de Hermes (entradas separadas por `§`) | cada entrada es un borrador en `memoria/borradores/` (`USER.md` → `persona`, `MEMORY.md` → `nota`) |
+| `carpeta` | carpeta Markdown u Obsidian | cada `.md` pasa a nota con ficha (`type`, `title`, `description`, `status`, `actualizado`) |
+| `planes` | `.md` de planes | todo a `planes/` con `type: plan` |
+| `auto` (por defecto) | | `MEMORY.md`/`USER.md` o ficheros con `§` → libreta; si no, carpeta |
+
+Reglas de `carpeta`:
+
+* **Tipos.** Se conserva el `type` si es de MiCerebro; `user`→`persona`, `feedback`→`aprendizaje`, `project`→`proyecto`, `reference`→`recurso`, `note`→`nota`; cualquier otro cae en `nota` y el inventario lo avisa. El tipo original queda en `tipo_original`.
+* **Destino.** `proyecto`, `area`, `recurso` y `plan` van directos a `proyectos/`, `areas/`, `recursos/`, `planes/`. Todo lo demás (`nota`, `decision`, `aprendizaje`, `persona`…) entra en `memoria/borradores/` con `status: draft` y lo coloca el revisor.
+* **Frontmatter.** Lo que ya tenía (`tags`, etc.) se conserva; `name` hace de `title`; si falta `description` se toma de la primera línea. Se añade `origen` (ruta relativa de la nota en el origen). `actualizado` sale del propio frontmatter (`actualizado`, `updated`, `date`) o de la fecha del fichero.
+* **Enlaces.** `[[nota]]`, `[[nota|alias]]`, `[[nota#sección]]` y `[texto](otra.md)` pasan a enlace Markdown relativo al fichero destino; si la nota no se migra, queda el texto plano. `![[imagen.png]]` apunta al adjunto copiado. Bloques de código y `código en línea` no se tocan.
+* **Adjuntos.** Lo que no es `.md` se copia tal cual a `recursos/adjuntos/<carpeta-origen>/` (`--sin-adjuntos` para no copiarlos). Se ignoran `.obsidian/`, `.git/`, `node_modules/` y todo lo que empiece por `.`.
+
+Al aplicar queda `registro/AAAA-MM-DD-migrar-<nombre>.md` con la tabla origen → destino y el
+sha256 de cada origen.
+
 ## Tests
 
 ```bash
