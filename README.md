@@ -59,7 +59,7 @@ status: draft                # draft hasta que el revisor la promueve (entonces 
 actualizado: 2026-11-08
 ---
 
-Cuerpo de la nota. Enlaces entre notas con [[otro-titulo]].
+Cuerpo de la nota. Enlaces entre notas en Markdown relativo: [otra nota](../ruta/otra-nota.md).
 ```
 
 ## Raíz: de dónde sale la carpeta del cerebro
@@ -148,18 +148,37 @@ Por cada borrador de `memoria/borradores/` (ignora `_rechazados/`, `index.md` y 
   (o `OKF_REVISOR_PUSH=0`) hace commit pero no sube. Un fallo de red deja el commit local y
   sale con código 1.
 
-### Timer de systemd (usuario)
+### Revisor automático
+
+Un solo comando programa el revisor para que corra cada hora en tu máquina (usa la raíz
+como el resto: `--root`, `OKF_ROOT`, `okf.config.json` hacia arriba o el directorio actual):
 
 ```bash
-mkdir -p ~/.config/systemd/user
-cp systemd/okf-revisor.service systemd/okf-revisor.timer ~/.config/systemd/user/
-# edita OKF_ROOT y la ruta de ExecStart (usan %h = tu carpeta personal)
-systemctl --user daemon-reload
-systemctl --user enable --now okf-revisor.timer
-systemctl --user list-timers okf-revisor.timer
+# Linux, macOS y Windows (PowerShell o cmd), desde tu carpeta de cerebro:
+node /ruta/okf-kit/okf/okf-programar.mjs --aplicar      # programa
+node /ruta/okf-kit/okf/okf-programar.mjs --estado       # ¿está programado? (por defecto)
+node /ruta/okf-kit/okf/okf-programar.mjs --quitar       # lo deshace
+# --dry-run con cualquiera: imprime lo que escribiría y ejecutaría, sin hacerlo
 ```
 
-En macOS, el equivalente es un `launchd` o un `cron` que ejecute el mismo comando.
+Es idempotente (aplicar dos veces deja lo mismo) y hay una sola programación por usuario:
+aplicar con otra raíz sustituye a la anterior. Todo lo que crea lleva la marca «Generado por okf-programar.mjs»: si ya hay algo con ese nombre que no es suyo (un enlace simbólico, una unit o tarea tuya), aborta sin tocarlo; `--forzar` lo sustituye. Todo se escribe fuera de tu cerebro, en la
+carpeta del usuario, y siempre con rutas absolutas (`node` incluido).
+
+| Sistema | Qué crea | Log |
+|---|---|---|
+| Linux | `~/.config/systemd/user/okf-revisor.{service,timer}` (generadas desde `systemd/`), `systemctl --user enable --now okf-revisor.timer` | `journalctl --user -u okf-revisor` |
+| macOS | LaunchAgent `~/Library/LaunchAgents/io.github.adriamg98.okf-revisor.plist` (`StartInterval` 3600 + `RunAtLoad`), cargado con `launchctl bootstrap gui/<uid>` | `registro/okf-revisor.log` de tu cerebro si existe la carpeta; si no, `~/Library/Logs/okf-revisor.log` |
+| Windows | tarea `okf-revisor` de `schtasks` cada hora + `%LOCALAPPDATA%\okf-revisor\okf-revisor.vbs` (con la ruta de node dentro, en UTF-16) | sin log propio (ejecútalo a mano para ver la salida) |
+
+En Windows la tarea no abre ventana: `schtasks` lanza `wscript.exe //B`, y el `.vbs` ejecuta
+node con la ventana oculta; la tarea solo lleva la raíz como argumento. Es lo más robusto porque viene en todo Windows y no depende de
+opciones de consola que cambian entre versiones. Como `schtasks /TR` admite 261 caracteres,
+una ruta muy larga da error claro: usa una más corta.
+
+Para hacerlo a mano en Linux, copia las units de `systemd/` a `~/.config/systemd/user/`,
+edita `OKF_ROOT` y `ExecStart`, y lanza `systemctl --user daemon-reload` y
+`systemctl --user enable --now okf-revisor.timer`.
 
 ## okf.config.json
 
