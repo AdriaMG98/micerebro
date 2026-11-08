@@ -260,3 +260,70 @@ def test_tipos_configurables(enchufe, monkeypatch):
     monkeypatch.setenv("ENCHUFE_TIPOS", "idea, hecho")
     assert enchufe._tipos() == ("idea", "hecho")
     assert enchufe._tipo_espejo("user") == "idea" and enchufe._tipo_espejo("memory") == "idea"
+
+
+# -- raíz deducida: el gateway arrancó sin OKF_ROOT -----------------------------
+
+def _cerebro_con_enchufe(tmp_path):
+    """<tmp>/MiCerebro con okf.config.json y .okf/{hermes-enchufe,okf} copiados del repo."""
+    raiz = tmp_path / "MiCerebro"
+    (raiz / ".okf").mkdir(parents=True)
+    (raiz / "okf.config.json").write_text("{}", encoding="utf-8")
+    shutil.copytree(OKF_DIR, raiz / ".okf" / "okf")
+    shutil.copytree(OKF_DIR.parent / "hermes-enchufe", raiz / ".okf" / "hermes-enchufe",
+                    ignore=shutil.ignore_patterns("tests", "__pycache__"))
+    return raiz
+
+
+@pytest.mark.skipif(not shutil.which("node"), reason="sin node")
+def test_sin_okf_root_el_enchufe_deduce_la_raiz(enchufe, tmp_path, monkeypatch):
+    raiz = _cerebro_con_enchufe(tmp_path)
+    ajeno = tmp_path / "gateway-cwd"
+    ajeno.mkdir()
+    monkeypatch.chdir(ajeno)
+    for v in ("OKF_ROOT", "ENCHUFE_OKF_CMD", "ENCHUFE_OKF_MCP_CMD", "ENCHUFE_OKF_PATH"):
+        monkeypatch.delenv(v, raising=False)
+    monkeypatch.setattr(enchufe, "__file__", str(raiz / ".okf" / "hermes-enchufe" / "__init__.py"))
+    monkeypatch.setenv("ENCHUFE_OKF_PATH", str(raiz / ".okf" / "okf"))
+    texto = enchufe._run_okf_guardar("nota", "Apunte de prueba", "cuerpo del apunte")
+    borradores = list((raiz / "memoria" / "borradores").glob("*.md"))
+    assert len(borradores) == 1
+    assert str(borradores[0]) in texto  # el mensaje dice dónde cayó
+    assert list(ajeno.iterdir()) == []  # nada en el cwd ajeno
+
+
+def test_raiz_deducida_por_ruta_okf_si_el_plugin_esta_copiado(enchufe, tmp_path, monkeypatch):
+    raiz = _cerebro_con_enchufe(tmp_path)
+    monkeypatch.setattr(enchufe, "__file__", str(tmp_path / "otro-sitio" / "enchufe" / "__init__.py"))
+    monkeypatch.setenv("ENCHUFE_OKF_PATH", str(raiz / ".okf" / "okf" / "okf.mjs"))
+    assert enchufe._raiz_deducida() == raiz
+    monkeypatch.setenv("ENCHUFE_OKF_PATH", str(tmp_path / "okf"))  # fuera de .okf/: no se inventa
+    assert enchufe._raiz_deducida() is None
+
+
+def test_okf_root_explicito_manda_y_wsl_no_se_toca(enchufe, tmp_path, monkeypatch):
+    monkeypatch.setenv("OKF_ROOT", "/srv/MiCerebro")
+    assert enchufe._env_okf(["node", "x.mjs"])["OKF_ROOT"] == "/srv/MiCerebro"
+    monkeypatch.delenv("OKF_ROOT")
+    raiz = _cerebro_con_enchufe(tmp_path)
+    monkeypatch.setattr(enchufe, "__file__", str(raiz / ".okf" / "hermes-enchufe" / "__init__.py"))
+    assert "OKF_ROOT" not in enchufe._env_okf(["wsl.exe", "-e", "node"])
+    assert enchufe._env_okf(["node", "x.mjs"])["OKF_ROOT"] == str(raiz)
+
+
+@pytest.mark.skipif(not shutil.which("node"), reason="sin node")
+def test_sin_cerebro_el_guardado_es_error_no_exito(enchufe, tmp_path, monkeypatch):
+    ajeno = tmp_path / "gateway-cwd"
+    ajeno.mkdir()
+    monkeypatch.chdir(ajeno)
+    for v in ("OKF_ROOT", "ENCHUFE_OKF_CMD", "ENCHUFE_OKF_MCP_CMD", "ENCHUFE_OKF_PATH"):
+        monkeypatch.delenv(v, raising=False)
+    # enchufe del repo (sin .okf/ a la vista): no hay raíz deducible, okf se niega
+    monkeypatch.setattr(enchufe, "__file__", str(tmp_path / "suelto" / "__init__.py"))
+    monkeypatch.setenv("ENCHUFE_OKF_PATH", str(OKF_DIR))
+    with pytest.raises(RuntimeError, match="no encuentro tu cerebro"):
+        enchufe._run_okf_guardar("nota", "X", "y")
+    assert list(ajeno.iterdir()) == []
+    p = enchufe.EnchufeMemoryProvider()
+    out = json.loads(p.handle_tool_call("okf_guardar", {"tipo": "nota", "titulo": "X", "cuerpo": "y"}))
+    assert "error" in out and "resultado" not in out

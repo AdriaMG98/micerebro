@@ -2,7 +2,10 @@
 
 Config SOLO por entorno (sin save_config nativo):
   OKF_ROOT               raíz del cerebro (carpeta con memoria/, planes/…); la lee okf directamente.
-                         Sin ella, okf usa el okf.config.json más cercano hacia arriba desde el cwd.
+                         Sin ella, el enchufe la deduce de dónde está instalado (`<raíz>/.okf/hermes-enchufe`,
+                         o `ENCHUFE_OKF_PATH` dentro de `<raíz>/.okf/`, con `<raíz>/okf.config.json`) y se la
+                         pasa a okf. Si tampoco así, okf busca okf.config.json hacia arriba desde el cwd y,
+                         si no lo halla, se niega a guardar (no escribe nada).
   ENCHUFE_OKF_CMD        comando completo para invocar okf.mjs (gana a todo lo demás), p. ej.
                          `node /ruta/a/okf/okf.mjs` o `wsl.exe -e node /ruta/en/wsl/okf/okf.mjs`
   ENCHUFE_OKF_PATH       ruta a okf.mjs (o a la carpeta okf/ que lo contiene)
@@ -78,6 +81,42 @@ def _wsl_cmd(ruta_unc: str) -> list[str]:
     return ["wsl.exe", "-d", distro, "--cd", "~", "-e", *entorno, "node", linux]
 
 
+def _raiz_de(carpeta_okf: Path) -> Path | None:
+    """`<X>/.okf/<algo>` -> X si existe `<X>/okf.config.json`."""
+    if carpeta_okf.parent.name != ".okf":
+        return None
+    raiz = carpeta_okf.parent.parent
+    return raiz if (raiz / "okf.config.json").is_file() else None
+
+
+def _raiz_deducida() -> Path | None:
+    """Raíz del cerebro cuando no hay OKF_ROOT: la del sitio donde está instalado el enchufe
+    (symlink resuelto) o, si el instalador lo copió, la de ENCHUFE_OKF_PATH. None si no se puede deducir."""
+    try:
+        r = _raiz_de(Path(os.path.realpath(__file__)).parent)
+        if r:
+            return r
+        raw = os.environ.get("ENCHUFE_OKF_PATH", "").strip()
+        if raw:
+            ruta = Path(os.path.realpath(Path(raw).expanduser()))
+            carpeta = ruta.parent if ruta.suffix == ".mjs" else ruta
+            return _raiz_de(carpeta)
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def _env_okf(cmd: list[str]) -> dict[str, str]:
+    """Entorno para el subprocess de okf: con OKF_ROOT explícito si hay o se deduce
+    (el gateway puede haber arrancado antes de que el .env la trajera). La rama WSL ya la pasa con `env`."""
+    env = dict(os.environ)
+    if not env.get("OKF_ROOT", "").strip() and not (cmd and Path(cmd[0]).name.lower().startswith("wsl")):
+        raiz = _raiz_deducida()
+        if raiz:
+            env["OKF_ROOT"] = str(raiz)
+    return env
+
+
 def _ruta_okf_js() -> Path:
     """okf.mjs: ENCHUFE_OKF_PATH (fichero o carpeta okf/) o la carpeta `okf/` hermana de este plugin."""
     raw = os.environ.get("ENCHUFE_OKF_PATH", "").strip()
@@ -129,7 +168,8 @@ def _okf_mcp_cmd() -> list[str]:
 def _run_okf_buscar(pregunta: str, timeout: float = _BUSCAR_TIMEOUT) -> str:
     """`okf buscar`; lanza RuntimeError si okf no responde."""
     try:
-        r = subprocess.run(_okf_cmd() + ["buscar", pregunta], capture_output=True, text=True,
+        cmd = _okf_cmd()
+        r = subprocess.run(cmd + ["buscar", pregunta], capture_output=True, text=True, env=_env_okf(cmd),
                            encoding="utf-8", timeout=timeout, creationflags=_SIN_VENTANA)
     except (OSError, subprocess.SubprocessError) as e:
         raise RuntimeError(f"okf no responde: {e}") from e
@@ -152,7 +192,8 @@ def _run_okf_guardar(tipo: str, titulo: str, cuerpo: str, timeout: float = _GUAR
     ]
     try:
         r = subprocess.run(cmd, input="\n".join(json.dumps(m) for m in msgs) + "\n", capture_output=True,
-                           text=True, encoding="utf-8", timeout=timeout, creationflags=_SIN_VENTANA)
+                           text=True, encoding="utf-8", timeout=timeout, creationflags=_SIN_VENTANA,
+                           env=_env_okf(cmd))
     except (OSError, subprocess.SubprocessError) as e:
         raise RuntimeError(f"okf-mcp no responde: {e}") from e
     for line in r.stdout.splitlines():
@@ -166,6 +207,8 @@ def _run_okf_guardar(tipo: str, titulo: str, cuerpo: str, timeout: float = _GUAR
         texto = " ".join(c.get("text", "") for c in res.get("content", []))
         if res.get("isError") or "error" in resp:
             raise RuntimeError(texto or str(resp.get("error")))
+        if "borrador guardado" not in texto:  # sin confirmación de okf no se dice «guardado»
+            raise RuntimeError(f"okf no confirmó el guardado: {texto[:200]}")
         return texto
     raise RuntimeError((r.stderr or "okf-mcp sin respuesta").strip()[:300])
 

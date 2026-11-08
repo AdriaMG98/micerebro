@@ -8,7 +8,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
-import { cargarConfig, defaultRoot, fichaBorradorKit } from './okf-config.mjs';
+import { cargarConfig, resolverRaiz, exigirCerebro, fichaBorradorKit } from './okf-config.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Rutas y tipos salen de la config activa (okf-config.mjs).
@@ -97,7 +97,7 @@ function guardar(root, config, args) {
   for (let n = 2; fs.existsSync(path.join(config.borradoresDir, `${nombre}.md`)); n++) nombre = `${slug}-${n}`;
   const destino = path.join(config.borradoresDir, `${nombre}.md`);
   atomicWrite(destino, fichaBorradorKit({ tipo, titulo, cuerpo, fecha: today() }));
-  return `OKF: borrador guardado ${path.relative(root, destino)}`;
+  return `OKF: borrador guardado ${path.relative(root, destino)} (${destino})`;
 }
 
 function buildTools(config) {
@@ -140,7 +140,10 @@ function callTool(root, config, name, args) {
       }
       return textResult(lines.join('\n'));
     }
-    if (name === 'okf_guardar') return textResult(guardar(root, config, args));
+    if (name === 'okf_guardar') {
+      exigirCerebro(infoRaiz);
+      return textResult(guardar(root, config, args));
+    }
     if (name === 'okf_caducados') return textResult(runOkf(root, ['caducados']));
     return textResult(`tool desconocida: ${name}`, true);
   } catch (error) {
@@ -158,7 +161,9 @@ function respondError(id, code, message) {
 
 // Raíz: --root > OKF_ROOT > okf.config.json hacia arriba desde el cwd > cwd.
 const rootIdx = process.argv.indexOf('--root');
-const root = path.resolve((rootIdx >= 0 && process.argv[rootIdx + 1]) || defaultRoot());
+const rootFlag = rootIdx >= 0 && process.argv[rootIdx + 1];
+const infoRaiz = rootFlag ? { root: path.resolve(rootFlag), origen: 'flag' } : resolverRaiz();
+const root = infoRaiz.root;
 const config = cargarConfig(root);
 const TOOLS = buildTools(config);
 let buffer = '';

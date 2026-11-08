@@ -24,7 +24,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { defaultRoot, cargarConfig, fichaBorradorKit } from './okf-config.mjs';
+import { resolverRaiz, exigirCerebro, cargarConfig, fichaBorradorKit } from './okf-config.mjs';
 import { parseFrontmatter } from './okf-comun.mjs';
 
 // Mapa de tipos de otros mundos (user|feedback|project|reference, notas genéricas) → tipos del kit.
@@ -414,7 +414,9 @@ function main() {
   const dry = flags.has('--dry-run');
   const ap = flags.has('--aplicar');
   if (dry === ap) throw new Error('elige exactamente una acción: --dry-run (inventario) o --aplicar');
-  const root = path.resolve(valores.root || defaultRoot());
+  const info = valores.root ? { root: path.resolve(valores.root), origen: 'flag' } : resolverRaiz();
+  const root = info.root;
+  if (ap) exigirCerebro(info);
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) throw new Error(`la raíz no existe: ${root}`);
   const hoy = valores.hoy || iso(new Date());
   if (!esFecha(hoy)) throw new Error('--hoy debe ser AAAA-MM-DD');

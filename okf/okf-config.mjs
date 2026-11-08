@@ -18,15 +18,29 @@ export const FICHERO_CONFIG = 'okf.config.json';
 // el código puede vivir en cualquier sitio (o dentro de otro repo) y la raíz de
 // la memoria es la de quien lo invoca. (--root manda sobre todo esto, en los llamadores.)
 export function defaultRoot() {
-  if (process.env.OKF_ROOT) return path.resolve(process.env.OKF_ROOT);
+  return resolverRaiz().root;
+}
+
+// Como defaultRoot, pero dice de dónde salió: 'env' (OKF_ROOT), 'config' (okf.config.json
+// subiendo desde el cwd) o 'cwd' (último recurso: sin pista alguna de dónde está el cerebro).
+export function resolverRaiz() {
+  if (process.env.OKF_ROOT) return { root: path.resolve(process.env.OKF_ROOT), origen: 'env' };
   let d = process.cwd();
   for (;;) {
-    if (fs.existsSync(path.join(d, FICHERO_CONFIG))) return d;
+    if (fs.existsSync(path.join(d, FICHERO_CONFIG))) return { root: d, origen: 'config' };
     const padre = path.dirname(d);
     if (padre === d) break;
     d = padre;
   }
-  return process.cwd();
+  return { root: process.cwd(), origen: 'cwd' };
+}
+
+// Las operaciones que escriben se niegan si la raíz salió del último recurso: crearían
+// `memoria/borradores/` en un cwd cualquiera y dirían «guardado» (fallo silencioso).
+// `explicita`: la raíz vino de --root. Lanza un Error claro; sin él, la raíz es válida.
+export function exigirCerebro({ root, origen }, explicita = false) {
+  if (explicita || origen !== 'cwd') return;
+  throw new Error(`no encuentro tu cerebro: falta ${FICHERO_CONFIG} en ${root} ni en ninguna carpeta superior; define OKF_ROOT o usa --root`);
 }
 
 // Directorios que ningún walker debe recorrer: código compilado, dependencias

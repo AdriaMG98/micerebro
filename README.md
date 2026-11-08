@@ -69,7 +69,11 @@ Todos los programas (`okf.mjs`, `okf-mcp.mjs`, `okf-revisor.mjs`) resuelven la r
 1. `--root <ruta>`
 2. variable de entorno `OKF_ROOT`
 3. subir desde el directorio actual hasta encontrar un `okf.config.json`
-4. el directorio actual
+4. el directorio actual (último recurso: solo para leer)
+
+Si la raíz sale del punto 4 (sin `--root`, sin `OKF_ROOT` y sin `okf.config.json` hacia arriba), las
+operaciones que escriben (`okf guardar`, `okf_guardar` del MCP, `okf-migrar --aplicar`) se niegan con
+«no encuentro tu cerebro» y no crean nada; buscar y listar siguen funcionando.
 
 Nunca se deduce de dónde están los scripts: puedes tenerlos en cualquier sitio.
 
@@ -243,7 +247,7 @@ Configuración, solo por entorno:
 
 | Variable | Valor |
 |---|---|
-| `OKF_ROOT` | Raíz de tu cerebro (la lee okf). |
+| `OKF_ROOT` | Raíz de tu cerebro (la lee okf). Sin ella, el enchufe la deduce de dónde está instalado (`<raíz>/.okf/hermes-enchufe`, o `ENCHUFE_OKF_PATH` dentro de `<raíz>/.okf/`, con `<raíz>/okf.config.json`) y se la pasa a okf. Un gateway ya arrancado no relee el `.env`: reinicia Hermes tras cambiarlo. |
 | `ENCHUFE_OKF_PATH` | Ruta a `okf.mjs` o a la carpeta `okf/`. Sin ella: `okf/` junto a `hermes-enchufe/`. |
 | `ENCHUFE_OKF_CMD` | Comando completo para invocar okf (gana a lo anterior), p. ej. `node /ruta/okf/okf.mjs`. |
 | `ENCHUFE_OKF_MCP_CMD` | Comando de `okf-mcp.mjs` (por defecto, el de arriba con `okf-mcp.mjs`). |

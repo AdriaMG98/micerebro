@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { cargarConfig, defaultRoot, fichaBorradorKit } from './okf-config.mjs';
+import { cargarConfig, resolverRaiz, exigirCerebro, fichaBorradorKit } from './okf-config.mjs';
 
 // Rutas, fuentes y tipos salen de la config activa (okf-config.mjs:
 // preset `micerebro`, o lo que diga okf.config.json en la raíz).
@@ -802,7 +802,8 @@ function parseArgs(argv) {
 function main() {
   const argv = parseArgs(process.argv.slice(2));
   const sub = argv._.shift();
-  const root = path.resolve(argv.root || process.env.OKF_ROOT || defaultRoot());
+  const info = argv.root ? { root: path.resolve(argv.root), origen: 'flag' } : resolverRaiz();
+  const root = info.root;
   let config;
   try {
     config = cargarConfig(root);
@@ -833,6 +834,7 @@ function main() {
       if (!query) throw new Error('uso: okf buscar "pregunta"');
       cmdBuscar(root, config, query, Boolean(argv.debug), Boolean(argv.todo));
     } else if (sub === 'guardar') {
+      exigirCerebro(info);
       cmdGuardar(root, config, argv);
     } else if (sub === 'caducados') {
       cmdCaducados(root, config);

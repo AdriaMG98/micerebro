@@ -181,3 +181,42 @@ test('config parcial: leer/guardar se fusionan con el preset y los tipos mal dad
   const res = llamarMcp(cerebro({ 'okf.config.json': '{"leer":{}}' }), [{ method: 'tools/call', params: { name: 'okf_listar', arguments: {} } }]);
   assert.ok(res[0].result.content[0].text.includes('Reforma de cocina'));
 });
+
+// ── sin cerebro, okf no escribe: el último recurso (cwd sin okf.config.json) solo vale para leer ──
+test('guardar sin --root, sin OKF_ROOT y sin okf.config.json: error y nada creado', () => {
+  const ajeno = fs.mkdtempSync(path.join(os.tmpdir(), 'okf-sin-cerebro-'));
+  const env = { ...process.env };
+  delete env.OKF_ROOT;
+  const r = spawnSync(process.execPath, [okf, 'guardar', 'nota', 'Algo', '--body', 'texto'], { cwd: ajeno, env, encoding: 'utf8' });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /no encuentro tu cerebro: falta okf\.config\.json/);
+  assert.deepEqual(fs.readdirSync(ajeno), []);
+  // buscar sigue funcionando (lectura)
+  const b = spawnSync(process.execPath, [okf, 'buscar', 'algo'], { cwd: ajeno, env, encoding: 'utf8' });
+  assert.doesNotMatch(b.stderr, /no encuentro tu cerebro/);
+  assert.deepEqual(fs.readdirSync(ajeno), []);
+});
+
+test('okf-mcp okf_guardar sin cerebro: isError y nada creado; con OKF_ROOT guarda y da la ruta absoluta', () => {
+  const ajeno = fs.mkdtempSync(path.join(os.tmpdir(), 'okf-sin-cerebro-'));
+  const env = { ...process.env };
+  delete env.OKF_ROOT;
+  const msgs = [
+    { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '1' } } },
+    { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'okf_guardar', arguments: { tipo: 'nota', titulo: 'Algo', cuerpo: 'texto' } } },
+  ].map((m) => JSON.stringify(m)).join('\n') + '\n';
+  const llama = (cwd, e) => {
+    const r = spawnSync(process.execPath, [mcp], { cwd, env: e, input: msgs, encoding: 'utf8' });
+    const lineas = r.stdout.split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    return lineas.find((x) => x.id === 2).result;
+  };
+  const mal = llama(ajeno, env);
+  assert.equal(mal.isError, true);
+  assert.match(mal.content[0].text, /no encuentro tu cerebro/);
+  assert.deepEqual(fs.readdirSync(ajeno), []);
+  const root = cerebro();
+  const bien = llama(ajeno, { ...env, OKF_ROOT: root });
+  assert.ok(!bien.isError);
+  assert.ok(bien.content[0].text.includes(path.join(root, 'memoria', 'borradores')));
+  assert.deepEqual(fs.readdirSync(ajeno), []);
+});
