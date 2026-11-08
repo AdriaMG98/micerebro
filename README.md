@@ -49,8 +49,8 @@ MiCerebro/
 ```
 
 Cada carpeta tiene su `index.md` con una línea por nota: `* [Título](fichero.md) - descripción`.
-`buscar` usa esas descripciones para puntuar; el revisor las mantiene. `ejemplo/` es un cerebro
-vacío con esta estructura y un borrador de muestra.
+`buscar` usa esas descripciones para puntuar; las mantiene el guardado (o el revisor, en modo borrador). `ejemplo/` es un cerebro
+vacío con esta estructura, en modo directo (sin borradores).
 
 Una nota es un `.md` con ficha YAML al principio:
 
@@ -172,6 +172,8 @@ Por cada borrador de `memoria/borradores/` (ignora `_rechazados/`, `index.md` y 
   sale con código 1.
 
 ### Revisor automático
+
+> Solo sirve con `guardar.modo: "borrador"`. En modo `directo` (el de por defecto) no hay nada que programar: `okf-programar.mjs` y `systemd/` no hacen falta.
 
 Un solo comando programa el revisor para que corra cada hora en tu máquina (usa la raíz
 como el resto: `--root`, `OKF_ROOT`, `okf.config.json` hacia arriba o el directorio actual):
