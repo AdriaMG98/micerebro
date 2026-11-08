@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 import { cargarConfig, resolverRaiz, exigirCerebro, fichaBorradorKit } from './okf-config.mjs';
+import { guardarDirecto } from './okf-promover.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Rutas y tipos salen de la config activa (okf-config.mjs).
@@ -91,7 +92,11 @@ function guardar(root, config, args) {
   const titulo = requireString(args, 'titulo');
   const cuerpo = requireString(args, 'cuerpo');
   if (!config.tiposSet.has(tipo)) throw new Error(`tipo inválido "${tipo}"`);
-  // Todo okf_guardar nace borrador: el revisor es la única puerta a la nota publicada.
+  if (config.guardar.modo === 'directo') {
+    const fichero = guardarDirecto(root, config, { tipo, titulo, cuerpo, fecha: today() });
+    return `OKF: guardado ${path.relative(root, fichero)} (${fichero})`;
+  }
+  // En modo borrador, todo okf_guardar nace borrador: el revisor es la única puerta a la nota publicada.
   const slug = slugify(titulo);
   let nombre = slug;
   for (let n = 2; fs.existsSync(path.join(config.borradoresDir, `${nombre}.md`)); n++) nombre = `${slug}-${n}`;
@@ -101,7 +106,9 @@ function guardar(root, config, args) {
 }
 
 function buildTools(config) {
-  const descGuardar = `Guarda una nota SIEMPRE como borrador (${path.relative(config.root, config.borradoresDir)}/), sin indexar: la promueve el revisor. Tipos: ${config.tipos.join(', ')}${config.tipoDefecto ? ` (por defecto ${config.tipoDefecto})` : ''}.`;
+  const descGuardar = config.guardar.modo === 'directo'
+    ? `Guarda una nota ya promovida (en la carpeta de su tipo, con index.md y log.md): buscable al instante, sin revisor. Tipos: ${config.tipos.join(', ')}${config.tipoDefecto ? ` (por defecto ${config.tipoDefecto})` : ''}.`
+    : `Guarda una nota SIEMPRE como borrador (${path.relative(config.root, config.borradoresDir)}/), sin indexar: la promueve el revisor. Tipos: ${config.tipos.join(', ')}${config.tipoDefecto ? ` (por defecto ${config.tipoDefecto})` : ''}.`;
   return [
     { name: 'okf_buscar', description: 'Busca contexto curado con la escalera determinista OKF.', inputSchema: { type: 'object', properties: { pregunta: { type: 'string' } }, required: ['pregunta'], additionalProperties: false } },
     { name: 'okf_leer', description: `Lee una nota de contexto por ${config.campoNombre} o por fichero.`, inputSchema: { type: 'object', properties: { nombre: { type: 'string' } }, required: ['nombre'], additionalProperties: false } },

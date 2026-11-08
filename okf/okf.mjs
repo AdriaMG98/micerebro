@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { cargarConfig, resolverRaiz, exigirCerebro, fichaBorradorKit } from './okf-config.mjs';
+import { guardarDirecto } from './okf-promover.mjs';
 
 // Rutas, fuentes y tipos salen de la config activa (okf-config.mjs:
 // preset `micerebro`, o lo que diga okf.config.json en la raíz).
@@ -605,6 +606,13 @@ function cmdGuardar(root, config, argv) {
   body = body.replace(/\r\n/g, '\n').trim();
   if (!body) throw new Error('el body está vacío');
 
+  if (config.guardar.modo === 'directo') {
+    // Kit sin revisor: misma validación y misma escritura que la promoción (okf-promover).
+    const fichero = guardarDirecto(root, config, { tipo, titulo, cuerpo: body, fecha: new Date().toISOString().slice(0, 10) });
+    console.log(`OKF: guardado ${path.relative(root, fichero)} (${fichero})`);
+    return;
+  }
+
   if (config.guardar.modo === 'borrador') {
     // Kit: la nota nace borrador con ficha completa; los índices los toca el revisor.
     const dirB = config.borradoresDir;
@@ -769,8 +777,104 @@ function cmdCaducados(root, config) {
   console.log(`\nTotal: ${viejos} ficheros >${TTL_DIAS} días, ${rotos} enlaces rotos, de ${memorias.length} revisados.`);
 }
 
+// ── comando: curar --candidatos ──────────────────────────────────────────
+// Solo lee y solo código (sin LLM): lista notas curadas (no borradores, no archivo/) a revisar.
+//   duplicada      títulos o descripciones casi iguales: similitud de Jaccard >= UMBRAL_SIMILITUD
+//                  sobre tokens normalizados (minúsculas, sin tildes, sin stopwords, >= 2 letras),
+//                  con al menos 2 tokens en cada lado.
+//   contradiccion  el mismo par, pero con `actualizado` distinto en ambas: mismo tema, fechas
+//                  distintas, así que una de las dos puede estar desfasada.
+//   caducada       `actualizado` de hace más de DIAS_CADUCADA días (sin `actualizado`, no se juzga).
+//   enlace-roto    enlace Markdown relativo [x](ruta.md) a un fichero que no existe, o wikilink
+//                  [[nombre]] sin nota con ese nombre (el código y los bloques vallados no cuentan).
+const UMBRAL_SIMILITUD = 0.7;
+const DIAS_CADUCADA = 180;
+
+function jaccard(a, b) {
+  if (a.size < 2 || b.size < 2) return 0;
+  let comun = 0;
+  for (const t of a) if (b.has(t)) comun++;
+  return comun / (a.size + b.size - comun);
+}
+
+function candidatosCurar(root, config) {
+  const { candidates, byName } = buildCatalog(root, config);
+  const rel = (f) => path.relative(root, f).split(path.sep).join('/');
+  const notas = candidates.filter((c) => !isExcludedByDefault(c.path) && !rel(c.path).split('/').includes('archivo'));
+  const res = [];
+
+  // (a) duplicadas y (b) contradicciones
+  const fm = notas.map((c) => ({ c, titulo: new Set(tokenize(c.name)), desc: new Set(tokenize(c.description)), fecha: parseIsoDateLite(c.actualizado) }));
+  for (let i = 0; i < fm.length; i++) {
+    for (let j = i + 1; j < fm.length; j++) {
+      const a = fm[i];
+      const b = fm[j];
+      const sT = jaccard(a.titulo, b.titulo);
+      const sD = jaccard(a.desc, b.desc);
+      const sim = Math.max(sT, sD);
+      if (sim < UMBRAL_SIMILITUD) continue;
+      const donde = sT >= sD ? 'títulos' : 'descripciones';
+      const distintas = a.fecha && b.fecha && a.fecha.getTime() !== b.fecha.getTime();
+      res.push({
+        tipo: distintas ? 'contradiccion' : 'duplicada',
+        notas: [rel(a.c.path), rel(b.c.path)],
+        motivo: distintas
+          ? `${donde} casi iguales (similitud ${sim.toFixed(2)}) con actualizado distinto (${a.c.actualizado} / ${b.c.actualizado}): posible contradicción o versión desfasada`
+          : `${donde} casi iguales (similitud ${sim.toFixed(2)}): posible duplicada`,
+      });
+    }
+  }
+
+  // (c) caducadas y (d) enlaces rotos
+  const ahora = Date.now();
+  const nombres = new Set([...byName.keys()].map((n) => normalize(n)));
+  for (const { c, fecha } of fm) {
+    if (fecha) {
+      const dias = Math.floor((ahora - fecha.getTime()) / 86400000);
+      if (dias > DIAS_CADUCADA) res.push({ tipo: 'caducada', notas: [rel(c.path)], motivo: `actualizado ${c.actualizado}, hace ${dias} días (límite ${DIAS_CADUCADA})` });
+    }
+    const cuerpo = maskCode(c.body);
+    const visto = new Set();
+    for (const m of cuerpo.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)) {
+      const destino = m[1].split('#')[0].split('?')[0];
+      if (!destino || !/\.md$/i.test(destino) || /^[a-z][a-z0-9+.-]*:/i.test(destino) || destino.startsWith('/')) continue;
+      let decodificado = destino;
+      try { decodificado = decodeURI(destino); } catch {}
+      if (visto.has(decodificado)) continue;
+      visto.add(decodificado);
+      if (!fs.existsSync(path.resolve(path.dirname(c.path), decodificado))) {
+        res.push({ tipo: 'enlace-roto', notas: [rel(c.path)], motivo: `enlace a ${destino}, que no existe` });
+      }
+    }
+    for (const m of cuerpo.matchAll(/\[\[([^\]|#]+)[^\]]*\]\]/g)) {
+      const objetivo = m[1].trim();
+      if (visto.has(`[[${objetivo}]]`)) continue;
+      visto.add(`[[${objetivo}]]`);
+      if (!nombres.has(normalize(objetivo))) res.push({ tipo: 'enlace-roto', notas: [rel(c.path)], motivo: `wikilink [[${objetivo}]] sin nota con ese nombre` });
+    }
+  }
+  return res;
+}
+
+function cmdCurar(root, config, argv) {
+  if (!argv.candidatos) throw new Error('uso: okf curar --candidatos [--json]   (solo lista; no escribe nada)');
+  const lista = candidatosCurar(root, config);
+  if (argv.json) {
+    console.log(JSON.stringify(lista, null, 2));
+    return;
+  }
+  console.log(`OKF curar — candidatos a revisar (similitud >= ${UMBRAL_SIMILITUD}, caducada > ${DIAS_CADUCADA} días; NO escribe, solo lista)\n`);
+  if (!lista.length) {
+    console.log('Nada que revisar.');
+    return;
+  }
+  for (const r of lista) console.log(`[${r.tipo}] ${r.notas.join('  <->  ')}\n    ${r.motivo}`);
+  const por = (t) => lista.filter((r) => r.tipo === t).length;
+  console.log(`\nTotal: ${por('duplicada')} duplicadas, ${por('contradiccion')} contradicciones, ${por('caducada')} caducadas, ${por('enlace-roto')} enlaces rotos.`);
+}
+
 // ── arg parsing mínimo ──────────────────────────────────────────────────
-const BOOL_FLAGS = new Set(['todo', 'debug', 'dry-run']);
+const BOOL_FLAGS = new Set(['todo', 'debug', 'dry-run', 'candidatos', 'json']);
 
 function parseArgs(argv) {
   const out = { _: [] };
@@ -821,6 +925,7 @@ function main() {
         '  okf buscar "pregunta" [--todo] [--debug]',
         `  okf guardar ${config.tipoDefecto ? '[tipo] ' : ''}<${config.tipos.join('|')}> "titulo" --body -${Object.keys(config.guardar.destinos).length ? ` [--destino ${Object.keys(config.guardar.destinos).join('|')}]` : ''}`,
         '  okf caducados',
+        '  okf curar --candidatos [--json]   (duplicadas, contradicciones, caducadas, enlaces rotos; solo lista)',
         '',
         `raíz actual: ${root}  (preset: ${config.preset})  (override: --root <ruta> u OKF_ROOT)`,
       ].join('\n')
@@ -838,6 +943,8 @@ function main() {
       cmdGuardar(root, config, argv);
     } else if (sub === 'caducados') {
       cmdCaducados(root, config);
+    } else if (sub === 'curar') {
+      cmdCurar(root, config, argv);
     } else {
       throw new Error(`subcomando desconocido: ${sub}`);
     }

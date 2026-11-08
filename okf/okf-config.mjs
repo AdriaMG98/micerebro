@@ -69,7 +69,9 @@ function presetMiCerebro() {
     borradoresDir: 'memoria/borradores',
     caducables: ['memoria', 'proyectos', 'areas', 'recursos'],
     fuentes: dirs.map((d) => ({ dir: d, depth: 5, source: d, ...comunes })),
-    guardar: { modo: 'borrador', defecto: null, destinos: {} },
+    // modo: 'directo' (la nota nace promovida: ficha validada, carpeta de su type, index.md y log.md; sin revisor),
+    // 'borrador' (memoria/borradores/, la promueve okf-revisor) o 'indice' (destinos propios con índice).
+    guardar: { modo: 'directo', defecto: null, destinos: {} },
     leer: { dirs, ignorarFicheros: ['index.md', 'log.md'] },
     // okf-revisor: mueve cada borrador a la carpeta de su type,
     // añade su línea al index.md de esa carpeta y una entrada `* **Creación**` al log.md de la raíz.
@@ -147,7 +149,7 @@ function validarUsuario(root, u) {
   }
   if (u.guardar !== undefined) {
     if (!esObjeto(u.guardar)) throw new Error(`${FICHERO_CONFIG}: guardar debe ser un objeto`);
-    if (u.guardar.modo !== undefined && !['indice', 'borrador'].includes(u.guardar.modo)) throw new Error(`${FICHERO_CONFIG}: guardar.modo debe ser "indice" o "borrador"`);
+    if (u.guardar.modo !== undefined && !['indice', 'borrador', 'directo'].includes(u.guardar.modo)) throw new Error(`${FICHERO_CONFIG}: guardar.modo debe ser "indice", "borrador" o "directo"`);
     if (u.guardar.destinos !== undefined) {
       if (!esObjeto(u.guardar.destinos)) throw new Error(`${FICHERO_CONFIG}: guardar.destinos debe ser un objeto`);
       for (const [k, d] of Object.entries(u.guardar.destinos)) {

@@ -10,12 +10,13 @@ Config SOLO por entorno (sin save_config nativo):
                          `node /ruta/a/okf/okf.mjs` o `wsl.exe -e node /ruta/en/wsl/okf/okf.mjs`
   ENCHUFE_OKF_PATH       ruta a okf.mjs (o a la carpeta okf/ que lo contiene)
                          Si no hay ninguna de las dos: `okf/okf.mjs` junto a la carpeta de este plugin.
-  ENCHUFE_OKF_MCP_CMD    comando de okf-mcp.mjs, para guardar borradores (def.: el de okf.mjs con okf-mcp.mjs)
+  ENCHUFE_OKF_MCP_CMD    comando de okf-mcp.mjs, para guardar notas (def.: el de okf.mjs con okf-mcp.mjs)
   ENCHUFE_TIPOS          tipos de nota admitidos, separados por comas (def.: los de MiCerebro)
   ENCHUFE_PERFIL         nombre del perfil (def.: deducido del HERMES_HOME)
   ENCHUFE_GBRAIN_URL / ENCHUFE_GBRAIN_TOKEN   opcionales: activan la tool gbrain_query (integración
                          genérica con un servidor MCP HTTP de búsqueda semántica)
-Los borradores van a memoria/borradores/ vía okf-mcp (los promueve el revisor).
+Lo guardado entra vía okf-mcp: con guardar.modo «directo» (el del kit) queda ya promovido y buscable;
+con «borrador» va a memoria/borradores/ y lo promueve el revisor.
 Nunca lanza excepciones hacia Hermes.
 """
 
@@ -60,8 +61,8 @@ _STOP = object()
 _BLOQUE = (
     "Memoria de largo plazo: vive en okf (MiCerebro), compartida con el resto de tus agentes. "
     "Antes de preguntarle algo al usuario sobre él o sus proyectos, busca con okf_buscar. "
-    "Lo que aprendas y valga la pena conservar, guárdalo con okf_guardar: queda como borrador "
-    "y lo promueve el revisor. La libreta integrada se espeja sola a okf."
+    "Lo que aprendas y valga la pena conservar, guárdalo con okf_guardar: queda guardado y "
+    "buscable al instante. La libreta integrada se espeja sola a okf."
 )
 
 
@@ -140,7 +141,7 @@ def _tipos() -> tuple[str, ...]:
 
 
 def _tipo_espejo(target: str) -> str:
-    """Tipo del borrador que espeja una entrada de la libreta: lo del usuario es un aprendizaje, el resto una nota."""
+    """Tipo de la nota que espeja una entrada de la libreta: lo del usuario es un aprendizaje, el resto una nota."""
     deseado = "aprendizaje" if target == "user" else "nota"
     tipos = _tipos()
     return deseado if deseado in tipos else tipos[0]
@@ -179,7 +180,7 @@ def _run_okf_buscar(pregunta: str, timeout: float = _BUSCAR_TIMEOUT) -> str:
 
 
 def _run_okf_guardar(tipo: str, titulo: str, cuerpo: str, timeout: float = _GUARDAR_TIMEOUT) -> str:
-    """okf_guardar vía okf-mcp (stdio, una sola vuelta): siempre borrador. RuntimeError si falla."""
+    """okf_guardar vía okf-mcp (stdio, una sola vuelta). RuntimeError si falla."""
     cmd = _okf_mcp_cmd()
     if not cmd:
         raise RuntimeError("sin comando okf-mcp (define ENCHUFE_OKF_MCP_CMD)")
@@ -207,7 +208,7 @@ def _run_okf_guardar(tipo: str, titulo: str, cuerpo: str, timeout: float = _GUAR
         texto = " ".join(c.get("text", "") for c in res.get("content", []))
         if res.get("isError") or "error" in resp:
             raise RuntimeError(texto or str(resp.get("error")))
-        if "borrador guardado" not in texto:  # sin confirmación de okf no se dice «guardado»
+        if "guardado" not in texto:  # sin confirmación de okf no se dice «guardado»
             raise RuntimeError(f"okf no confirmó el guardado: {texto[:200]}")
         return texto
     raise RuntimeError((r.stderr or "okf-mcp sin respuesta").strip()[:300])
@@ -398,7 +399,7 @@ class EnchufeMemoryProvider(MemoryProvider):
              "parameters": {"type": "object", "properties": {"pregunta": {"type": "string"}},
                             "required": ["pregunta"], "additionalProperties": False}},
             {"name": "okf_guardar",
-             "description": "Guarda lo aprendido en okf como borrador (lo promueve el revisor).",
+             "description": "Guarda lo aprendido en okf (queda promovido y buscable al instante).",
              "parameters": {"type": "object", "properties": {
                  "tipo": {"type": "string", "enum": list(_tipos())}, "titulo": {"type": "string"},
                  "cuerpo": {"type": "string"}}, "required": ["tipo", "titulo", "cuerpo"],

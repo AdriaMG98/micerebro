@@ -3,15 +3,19 @@
 Una memoria de largo plazo para tus agentes de IA que es **solo una carpeta de ficheros
 Markdown**. Sin base de datos, sin dependencias: Node 18+ y git.
 
-- `okf.mjs` — CLI: `buscar`, `guardar`, `caducados`.
+- `okf.mjs` — CLI: `buscar`, `guardar`, `caducados`, `curar --candidatos`.
 - `okf-mcp.mjs` — servidor MCP (stdio) con las mismas herramientas, para Claude Code, Codex, Hermes…
-- `okf-revisor.mjs` — revisa los **borradores** que escriben los agentes y promueve a la memoria los buenos.
+- `okf-promover.mjs` — validar la ficha, elegir carpeta, escribir y anotar `index.md` y `log.md` (lo comparten el guardado directo, el revisor y `okf-migrar`).
+- `okf-revisor.mjs` — solo para `guardar.modo: "borrador"`: revisa los **borradores** y promueve a la memoria los buenos.
 - `hermes-enchufe/` — plugin de memoria para Hermes Agent que usa todo lo anterior.
 
-La idea: los agentes **nunca escriben directamente en tu memoria**. Todo lo que guardan nace
-como borrador en `memoria/borradores/`; el revisor (determinista, sin LLM) comprueba la ficha,
-mueve la nota a su carpeta, la apunta en el `index.md` y deja una línea en `log.md`. Y como la
-memoria es una carpeta, también es un repo git: cada promoción queda commiteada.
+La idea: lo que guardan los agentes **queda promovido y buscable al instante**. Con el modo por
+defecto (`guardar.modo: "directo"`) no hay revisor: `okf guardar` / `okf_guardar` construyen la ficha,
+la validan (la misma comprobación que hacía el revisor) y la escriben en la carpeta de su `type`,
+con su línea en el `index.md` y una entrada en `log.md`. Si la ficha no valida, no se escribe nada y
+sale un error. Quien prefiera el flujo antiguo pone `"modo": "borrador"`: entonces todo nace como
+borrador en `memoria/borradores/` y el revisor (determinista, sin LLM) lo promueve cada hora. Como
+la memoria es una carpeta, también es un repo git.
 
 ## Instalación
 
@@ -34,7 +38,7 @@ MiCerebro/
 ├── log.md                 # diario: una línea «Creación» por nota promovida
 ├── memoria/               # lo que debe durar
 │   ├── index.md
-│   ├── borradores/        # aquí caen las notas de los agentes (okf guardar / okf_guardar)
+│   ├── borradores/        # solo en modo "borrador": aquí caen las notas de los agentes
 │   ├── decisiones/        # AAAA-MM-DD-titulo.md
 │   ├── aprendizajes/      # AAAA-MM-DD-titulo.md
 │   └── personas/
@@ -55,7 +59,7 @@ Una nota es un `.md` con ficha YAML al principio:
 type: aprendizaje            # proyecto | area | recurso | nota | decision | aprendizaje | plan | persona | ficha-externa | registro | skill
 title: "Riego de tomates"
 description: "Regar por la mañana evita el moho."
-status: draft                # draft hasta que el revisor la promueve (entonces stable)
+status: draft                # al promoverla (directo o por el revisor) pasa a stable
 actualizado: 2026-11-08
 ---
 
@@ -83,17 +87,30 @@ Nunca se deduce de dónde están los scripts: puedes tenerlos en cualquier sitio
 okf buscar "cómo regar tomates"            # devuelve la nota ganadora, no una lista
 okf buscar "tomates" --todo                # incluye borradores y archivados
 okf buscar "tomates" --debug               # puntuaciones
-echo "Texto de la nota" | okf guardar aprendizaje "Título" --body -   # crea un borrador
+echo "Texto de la nota" | okf guardar aprendizaje "Título" --body -   # la crea ya promovida (modo borrador: un borrador)
 echo "Texto" | okf guardar "Título" --body -                          # tipo por defecto: nota
 okf caducados                              # notas sin tocar en 30 días y enlaces [[rotos]] (no borra nada)
+okf curar --candidatos [--json]            # qué notas revisar: duplicadas, contradicciones, caducadas, enlaces rotos
 ```
 
 La búsqueda es léxica y determinista (sin embeddings): puntúa título + descripción, desempata
 con el cuerpo, pondera por `type` y deja fuera borradores y `_archivo/`.
 
+### Curar: `okf curar --candidatos`
+
+Solo lee (nunca escribe) y no usa LLM: lista qué notas curadas conviene mirar. Ignora borradores y
+`archivo/`. Salida legible, o `--json` con una lista de `{tipo, notas: [rutas], motivo}`.
+
+| `tipo` | Qué detecta |
+|---|---|
+| `duplicada` | dos notas con título o descripción casi iguales: similitud de Jaccard ≥ **0,7** sobre los tokens (minúsculas, sin tildes, sin stopwords, ≥ 2 letras; mínimo 2 tokens por lado) |
+| `contradiccion` | el mismo par, pero con `actualizado` distinto en las dos: mismo tema, fechas distintas |
+| `caducada` | `actualizado` de hace más de **180 días** (sin `actualizado`, no se juzga) |
+| `enlace-roto` | enlace Markdown relativo `[x](ruta.md)` a un fichero que no existe, o `[[wikilink]]` sin nota con ese nombre (el código no cuenta) |
+
 ## Servidor MCP
 
-Tools: `okf_buscar`, `okf_leer`, `okf_listar`, `okf_guardar` (siempre borrador) y `okf_caducados`.
+Tools: `okf_buscar`, `okf_leer`, `okf_listar`, `okf_guardar` (en modo directo queda ya promovida; en modo borrador, como borrador) y `okf_caducados`.
 Se lanza con `node /ruta/okf-kit/okf/okf-mcp.mjs` y toma la raíz como arriba (`--root` u `OKF_ROOT`).
 
 **Claude Code**
@@ -125,7 +142,9 @@ mcp_servers:
 Dile a tu agente en su fichero de instrucciones (`CLAUDE.md`, `AGENTS.md`…) que busque con
 `okf_buscar` antes de preguntarte algo y que guarde con `okf_guardar` lo que valga la pena conservar.
 
-## Revisor de borradores
+## Revisor de borradores (solo modo `borrador`)
+
+En modo `directo` (el de por defecto) no hace falta. Sigue funcionando para quien use `guardar.modo: "borrador"`.
 
 ```bash
 node okf/okf-revisor.mjs --dry-run          # ensayo: lista qué promovería, no escribe nada
@@ -224,7 +243,7 @@ las rutas son relativas a la raíz y no pueden salir de ella.
 | `fuentes` | Qué carpetas/ficheros indexa `buscar`. Por fuente: `dir` o `archivo`, `source` (etiqueta), `depth`, `indiceFile` + `indiceFormato` (`estrella`: `* [t](r) - d`, o `guion`: `- [t](r) — d`), `indicePorCarpeta`, `soloIndice`, `exclude`, `ignorarFicheros`, `contiene`. |
 | `leer` | Carpetas donde `okf_leer`/`okf_listar` buscan. |
 | `revisor` | `destinos` (carpeta por `type`), `datados` (types con prefijo de fecha), `carpetaDefecto`, `log`, `rutasSincronizadas` (lo único que viaja en el commit). |
-| `guardar` | `modo: "borrador"` (defecto) o `"indice"` (el CLI escribe la nota directa y añade su línea a un índice; requiere `destinos` y `defecto`). El MCP y el revisor siempre usan borradores. |
+| `guardar` | `modo: "directo"` (defecto: la nota nace promovida, con `index.md` y `log.md`; un slug repetido añade `-2`, `-3`…), `"borrador"` (nace en `borradoresDir` y la promueve el revisor) o `"indice"` (el CLI escribe la nota directa y añade su línea a un índice; requiere `destinos` y `defecto`; el MCP en este modo guarda borradores). |
 
 Un fichero con JSON roto, un preset desconocido o una ruta fuera de la raíz da un error claro.
 
@@ -232,7 +251,7 @@ Un fichero con JSON roto, un preset desconocido o una ruta fuera de la raíz da 
 
 Conecta la memoria de Hermes con okf: en el primer turno de cada sesión busca en okf y se lo
 presta al modelo; expone las tools `okf_buscar` y `okf_guardar`; y espeja la libreta integrada de
-Hermes a borradores. Si okf no responde, avisa una vez y encola lo pendiente en
+Hermes a okf (con el modo directo, ya promovido). Si okf no responde, avisa una vez y encola lo pendiente en
 `enchufe-pendientes.jsonl` (se reintenta después). Nunca lanza excepciones hacia Hermes.
 
 ```bash
@@ -274,7 +293,7 @@ node okf/okf-migrar.mjs --origen <ruta> [--tipo ...] [--root <MiCerebro>] --apli
 
 | `--tipo` | Origen | Qué hace |
 |---|---|---|
-| `libreta` | `MEMORY.md` / `USER.md` de Hermes (entradas separadas por `§`) | cada entrada es un borrador en `memoria/borradores/` (`USER.md` → `persona`, `MEMORY.md` → `nota`) |
+| `libreta` | `MEMORY.md` / `USER.md` de Hermes (entradas separadas por `§`) | cada entrada es una nota en `memoria/personas/` o `memoria/` (`USER.md` → `persona`, `MEMORY.md` → `nota`); en modo borrador, un borrador en `memoria/borradores/` |
 | `carpeta` | carpeta Markdown u Obsidian | cada `.md` pasa a nota con ficha (`type`, `title`, `description`, `status`, `actualizado`) |
 | `planes` | `.md` de planes | todo a `planes/` con `type: plan` |
 | `auto` (por defecto) | | `MEMORY.md`/`USER.md` o ficheros con `§` → libreta; si no, carpeta |
@@ -282,7 +301,7 @@ node okf/okf-migrar.mjs --origen <ruta> [--tipo ...] [--root <MiCerebro>] --apli
 Reglas de `carpeta`:
 
 * **Tipos.** Se conserva el `type` si es de MiCerebro; `user`→`persona`, `feedback`→`aprendizaje`, `project`→`proyecto`, `reference`→`recurso`, `note`→`nota`; cualquier otro cae en `nota` y el inventario lo avisa. El tipo original queda en `tipo_original`.
-* **Destino.** `proyecto`, `area`, `recurso` y `plan` van directos a `proyectos/`, `areas/`, `recursos/`, `planes/`. Todo lo demás (`nota`, `decision`, `aprendizaje`, `persona`…) entra en `memoria/borradores/` con `status: draft` y lo coloca el revisor.
+* **Destino.** `proyecto`, `area`, `recurso` y `plan` van directos a `proyectos/`, `areas/`, `recursos/`, `planes/`. Todo lo demás (`nota`, `decision`, `aprendizaje`, `persona`…) se escribe ya promovido en su carpeta de `memoria/` (`status: stable`, con `index.md` y `log.md`); con `guardar.modo: "borrador"` entra en `memoria/borradores/` con `status: draft` y lo coloca el revisor.
 * **Frontmatter.** Lo que ya tenía (`tags`, etc.) se conserva; `name` hace de `title`; si falta `description` se toma de la primera línea. Se añade `origen` (ruta relativa de la nota en el origen). `actualizado` sale del propio frontmatter (`actualizado`, `updated`, `date`) o de la fecha del fichero.
 * **Enlaces.** `[[nota]]`, `[[nota|alias]]`, `[[nota#sección]]` y `[texto](otra.md)` pasan a enlace Markdown relativo al fichero destino; si la nota no se migra, queda el texto plano. `![[imagen.png]]` apunta al adjunto copiado. Bloques de código y `código en línea` no se tocan.
 * **Adjuntos.** Lo que no es `.md` se copia tal cual a `recursos/adjuntos/<carpeta-origen>/` (`--sin-adjuntos` para no copiarlos). Se ignoran `.obsidian/`, `.git/`, `node_modules/` y todo lo que empiece por `.`.

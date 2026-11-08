@@ -36,6 +36,9 @@ function cerebro(extra = {}) {
   return root;
 }
 
+// Config del kit con el flujo antiguo: lo guardado nace borrador y lo promueve el revisor.
+const BORRADOR = { 'okf.config.json': '{"guardar":{"modo":"borrador"}}' };
+
 function cli(root, args, input) {
   const r = spawnSync(process.execPath, [okf, ...args, '--root', root], { encoding: 'utf8', input });
   return { out: r.stdout, err: r.stderr, status: r.status };
@@ -65,8 +68,8 @@ test('buscar NO ve 00-bandeja ni archivo', () => {
   assert.doesNotMatch(r.out, /suelto\.md|viejo\.md/);
 });
 
-test('guardar aprendizaje crea borrador con ficha y tildes intactas', () => {
-  const root = cerebro();
+test('guardar aprendizaje crea borrador con ficha y tildes intactas (modo borrador)', () => {
+  const root = cerebro(BORRADOR);
   const r = cli(root, ['guardar', 'aprendizaje', 'Cómo regar higueras', '--body', '-'], 'Regar poco: la higuera es muy áspera con el exceso.\n');
   assert.equal(r.status, 0, r.err);
   const f = path.join(root, 'memoria/borradores/como-regar-higueras.md');
@@ -83,7 +86,7 @@ test('guardar con tipo feedback falla en micerebro', () => {
 });
 
 test('buscar excluye borradores salvo --todo', () => {
-  const root = cerebro();
+  const root = cerebro(BORRADOR);
   cli(root, ['guardar', 'nota', 'Mermelada de naranjas', '--body', 'Mermelada de naranjas amargas']);
   assert.match(cli(root, ['buscar', 'mermelada naranjas']).out, /0 aciertos/);
   assert.match(cli(root, ['buscar', 'mermelada naranjas', '--todo']).out, /borradores\/mermelada-de-naranjas\.md/);
@@ -128,8 +131,8 @@ function llamarMcp(root, llamadas) {
   return r.stdout.trim().split('\n').map((l) => JSON.parse(l));
 }
 
-test('okf-mcp con micerebro: listar tools, guardar y buscar', () => {
-  const root = cerebro();
+test('okf-mcp con micerebro (modo borrador): listar tools, guardar y buscar', () => {
+  const root = cerebro(BORRADOR);
   const res = llamarMcp(root, [
     { method: 'tools/list' },
     { method: 'tools/call', params: { name: 'okf_guardar', arguments: { tipo: 'decision', titulo: 'Usar pizarra', cuerpo: 'Decidimos usar una pizarra blanca.' } } },
@@ -170,7 +173,7 @@ test('config parcial: leer/guardar se fusionan con el preset y los tipos mal dad
   const root = cerebro({ 'okf.config.json': '{"leer":{},"guardar":{}}' });
   const c = cargarConfig(root);
   assert.ok(c.leer.dirs.length > 0 && Array.isArray(c.leer.ignorarFicheros));
-  assert.equal(c.guardar.modo, 'borrador');
+  assert.equal(c.guardar.modo, 'directo');
   const c2 = cargarConfig(cerebro({ 'okf.config.json': '{"leer":{"ignorarFicheros":["x.md"]}}' }));
   assert.ok(c2.leer.dirs.length > 0);
   const mal = ['{"leer":3}', '{"tipos":"nota"}', '{"fuentes":[{"source":"x"}]}', '{"leer":{"dirs":"memoria"}}', '{"guardar":{"modo":"zzz"}}', '[]'];
@@ -217,6 +220,6 @@ test('okf-mcp okf_guardar sin cerebro: isError y nada creado; con OKF_ROOT guard
   const root = cerebro();
   const bien = llama(ajeno, { ...env, OKF_ROOT: root });
   assert.ok(!bien.isError);
-  assert.ok(bien.content[0].text.includes(path.join(root, 'memoria', 'borradores')));
+  assert.ok(bien.content[0].text.includes(path.join(root, 'memoria', 'algo.md')));
   assert.deepEqual(fs.readdirSync(ajeno), []);
 });

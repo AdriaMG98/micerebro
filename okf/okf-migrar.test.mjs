@@ -33,6 +33,11 @@ function huellas(dir) {
   return out;
 }
 
+// Cerebro con el flujo antiguo: las notas sin carpeta propia caen en borradores/ para el revisor.
+function modoBorrador(root) {
+  escribir(root, 'okf.config.json', '{"guardar":{"modo":"borrador"}}');
+}
+
 function ejecutar(args) {
   const r = spawnSync(process.execPath, [migrar, ...args], { encoding: 'utf8' });
   return { code: r.status, out: r.stdout, err: r.stderr };
@@ -81,8 +86,9 @@ test('dry-run no escribe nada y avisa de que es inventario', () => {
   assert.deepEqual(huellas(e.base), antes);
 });
 
-test('libreta: una entrada = un borrador con ficha, USER.md → persona', () => {
+test('libreta (modo borrador): una entrada = un borrador con ficha, USER.md → persona', () => {
   const e = escenario();
+  modoBorrador(e.root);
   const r = ejecutar(['--origen', e.libreta, '--root', e.root, '--aplicar', '--hoy', '2026-11-08']);
   assert.equal(r.code, 0, r.err);
   const dir = path.join(e.root, 'memoria/borradores');
@@ -97,8 +103,9 @@ test('libreta: una entrada = un borrador con ficha, USER.md → persona', () => 
   assert.equal(persona.data.actualizado, '2026-11-08');
 });
 
-test('carpeta Obsidian: tipos, enlaces, adjuntos, conflicto, registro y origen intacto', () => {
+test('carpeta Obsidian (modo borrador): tipos, enlaces, adjuntos, conflicto, registro y origen intacto', () => {
   const e = escenario();
+  modoBorrador(e.root);
   const antes = huellas(e.base);
   const r = ejecutar(['--origen', e.boveda, '--root', e.root, '--aplicar', '--hoy', '2026-11-08']);
   assert.equal(r.code, 0, r.err);
@@ -175,6 +182,7 @@ test('description generada: texto plano, una línea, ≤200', () => {
   const larga = limpiarDescripcion('palabra '.repeat(80));
   assert.ok(larga.length <= 200 && !larga.includes('\n'));
   const e = escenario();
+  modoBorrador(e.root);
   escribir(e.boveda, 'Enlaza.md', '# T\n\n[[Cafetera|La cafetera]] con **negrita** y ![[foto.png]] y [web](https://x.es)\n');
   assert.equal(ejecutar(['--origen', e.boveda, '--root', e.root, '--aplicar']).code, 0);
   const d = parseFrontmatter(fs.readFileSync(path.join(e.root, 'memoria/borradores/enlaza.md'), 'utf8')).data.description;
@@ -191,4 +199,34 @@ test('origen igual a, dentro de, o que contiene la raíz: error y nada escrito',
     assert.match(r.err, /no puede ser la raíz del cerebro/);
   }
   assert.deepEqual(Object.keys(huellas(e.root)), [path.join('memoria', 'x.md')]);
+});
+
+test('modo directo (por defecto): --aplicar escribe ya promovido, con index.md y log.md, y el revisor no tiene nada que hacer', () => {
+  const e = escenario();
+  const r = ejecutar(['--origen', e.libreta, '--root', e.root, '--aplicar', '--hoy', '2026-11-08']);
+  assert.equal(r.code, 0, r.err);
+  assert.ok(!fs.existsSync(path.join(e.root, 'memoria/borradores')), 'nada en borradores/');
+  const cafe = parseFrontmatter(fs.readFileSync(path.join(e.root, 'memoria/el-cafe-es-descafeinado-nono.md'), 'utf8'));
+  assert.equal(cafe.data.status, 'stable');
+  assert.equal(cafe.data.type, 'nota');
+  const persona = parseFrontmatter(fs.readFileSync(path.join(e.root, 'memoria/personas/vive-en-logrono.md'), 'utf8'));
+  assert.equal(persona.data.type, 'persona');
+  assert.match(fs.readFileSync(path.join(e.root, 'memoria/index.md'), 'utf8'), /\* \[El café es descafeinado, ñoño\]\(el-cafe-es-descafeinado-nono\.md\)/);
+  assert.match(fs.readFileSync(path.join(e.root, 'memoria/personas/index.md'), 'utf8'), /vive-en-logrono\.md/);
+  const log = fs.readFileSync(path.join(e.root, 'log.md'), 'utf8');
+  assert.match(log, /## 2026-11-08/);
+  assert.equal((log.match(/\* \*\*Creación\*\*/g) || []).length, 5);
+  assert.match(r.out, /5 directos/);
+});
+
+test('modo directo: la bóveda coloca notas, decisiones y repetidos sin pisar; --dry-run dice dónde irían', () => {
+  const e = escenario();
+  const seco = ejecutar(['--origen', e.boveda, '--root', e.root, '--dry-run', '--hoy', '2026-11-08']);
+  assert.match(seco.out, /memoria\/aprendizajes\/2026-11-08-riego-de-tomates\.md/);
+  assert.deepEqual(fs.readdirSync(e.root), []);
+  const r = ejecutar(['--origen', e.boveda, '--root', e.root, '--aplicar', '--hoy', '2026-11-08']);
+  assert.equal(r.code, 0, r.err);
+  assert.ok(fs.existsSync(path.join(e.root, 'memoria/aprendizajes/2026-11-08-riego-de-tomates.md')));
+  assert.ok(fs.existsSync(path.join(e.root, 'memoria/riego.md')) && fs.existsSync(path.join(e.root, 'memoria/cafetera.md')));
+  assert.ok(!fs.existsSync(path.join(e.root, 'memoria/borradores')));
 });

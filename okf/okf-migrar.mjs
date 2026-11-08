@@ -8,11 +8,12 @@
 //
 // Tres orígenes:
 //   libreta  MEMORY.md / USER.md de Hermes (entradas separadas por `§`): cada entrada es un
-//            borrador en memoria/borradores/ (USER.md → persona, MEMORY.md → nota). El revisor las promueve.
+//            nota (USER.md → persona, MEMORY.md → nota): en guardar.modo «directo» (defecto) ya promovida
+//            en su carpeta con index.md y log.md; en «borrador», en memoria/borradores/ para el revisor.
 //   carpeta  Markdown / bóveda Obsidian: cada .md pasa a nota con ficha del kit. proyecto, area,
 //            recurso y plan van directos a proyectos/, areas/, recursos/, planes/; todo lo demás
-//            (nota, decision, aprendizaje, persona…) cae en borradores/ para que el revisor lo
-//            coloque. Los adjuntos (no .md) se copian a recursos/adjuntos/<carpeta>/.
+//            (nota, decision, aprendizaje, persona…) se promueve directo (modo «directo») o cae en
+//            borradores/ para que el revisor lo coloque (modo «borrador»). Los adjuntos (no .md) se copian a recursos/adjuntos/<carpeta>/.
 //   planes   .md de planes: todos a planes/ con type plan.
 //
 // Garantías: el origen no se toca (solo se lee); nunca se pisa un destino (sufijo -2, -3…);
@@ -26,6 +27,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { resolverRaiz, exigirCerebro, cargarConfig, fichaBorradorKit } from './okf-config.mjs';
 import { parseFrontmatter } from './okf-comun.mjs';
+import { rutaBaseKit, validateKit, escribirNotaKit } from './okf-promover.mjs';
 
 // Mapa de tipos de otros mundos (user|feedback|project|reference, notas genéricas) → tipos del kit.
 export const MAPA_TIPOS = {
@@ -205,6 +207,14 @@ export function planificar({ origen, tipo, root, hoy, adjuntos = true }) {
     return abs;
   };
   const dirTipo = (t) => path.join(root, CARPETA_DIRECTA[t]);
+  // Notas sin carpeta propia: en modo directo van ya a su carpeta de `revisor` (index.md y log.md
+  // incluidos, como las promovería el revisor); en modo borrador, a borradores/ para el revisor.
+  const modoDirecto = cfg.guardar.modo === 'directo';
+  const destinoNota = (tipo, titulo, respaldo) => {
+    if (!modoDirecto) return { abs: reservar(cfg.borradoresDir, respaldo, '.md'), promover: false };
+    const { dir, base } = rutaBaseKit(root, tipo, titulo, cfg, hoy);
+    return { abs: reservar(dir, base, '.md'), promover: true };
+  };
 
   if (modo === 'libreta') {
     const ficheros = stat.isFile() ? [origenReal] : fs.readdirSync(origenReal, { withFileTypes: true })
@@ -217,8 +227,8 @@ export function planificar({ origen, tipo, root, hoy, adjuntos = true }) {
       const hash = sha256(raw);
       entradas.forEach((cuerpo, i) => {
         const titulo = tituloDeEntrada(cuerpo);
-        const abs = reservar(cfg.borradoresDir, slug(titulo, `entrada-${i + 1}`), '.md');
-        items.push({ origen: `${path.basename(f)} §${i + 1}`, origenAbs: f, sha: hash, tipo: tipoE, destino: abs, accion: 'borrador', contenido: fichaBorradorKit({ tipo: tipoE, titulo, cuerpo, fecha: hoy }) });
+        const { abs, promover } = destinoNota(tipoE, titulo, slug(titulo, `entrada-${i + 1}`));
+        items.push({ origen: `${path.basename(f)} §${i + 1}`, origenAbs: f, sha: hash, tipo: tipoE, destino: abs, accion: promover ? 'directo' : 'borrador', promover, contenido: fichaBorradorKit({ tipo: tipoE, titulo, cuerpo, fecha: hoy }) });
       });
     }
     return { modo, items, ignorados, cfg, nombreOrigen, rootReal, conflictos };
@@ -253,9 +263,11 @@ export function planificar({ origen, tipo, root, hoy, adjuntos = true }) {
     const base = path.basename(f.rel, path.extname(f.rel));
     const titulo = String(d.title || d.name || h1 || base.replace(/[-_]+/g, ' ')).trim();
     const directo = CARPETA_DIRECTA[tipoN] && cfg.tiposSet.has(tipoN);
-    const dirDest = directo ? dirTipo(tipoN) : cfg.borradoresDir;
-    const abs = reservar(dirDest, slug(base, slug(titulo)), '.md');
-    notas.push({ f, raw, fm, d, crudo, tipoN, titulo, base, directo, abs, texto, bloques: bloquesFrontmatter(texto), mtime: fs.statSync(f.abs).mtime });
+    let abs;
+    let promover = false;
+    if (directo) abs = reservar(dirTipo(tipoN), slug(base, slug(titulo)), '.md');
+    else ({ abs, promover } = destinoNota(tipoN, titulo, slug(base, slug(titulo))));
+    notas.push({ f, raw, fm, d, crudo, tipoN, titulo, base, directo, promover, abs, texto, bloques: bloquesFrontmatter(texto), mtime: fs.statSync(f.abs).mtime });
   }
   // adjuntos
   const adj = [];
@@ -298,7 +310,7 @@ export function planificar({ origen, tipo, root, hoy, adjuntos = true }) {
     const primera = cuerpo.split('\n').filter((l) => !/^\s*#/.test(l)).map((l) => limpiarDescripcion(l)).find((l) => l && !/^-{3,}$/.test(l)) || limpiarDescripcion(n.titulo) || 'Nota migrada';
     const description = String(d.description || primera).trim();
     const fecha = [d.actualizado, d.updated, String(d.date || '').slice(0, 10)].find(esFecha) || iso(n.mtime);
-    const status = n.directo ? (d.status || 'draft') : 'draft';
+    const status = n.directo ? (d.status || 'draft') : 'draft'; // una nota promovida pasa a stable al escribirse
     const extras = n.bloques.filter((b) => !manejadas.has(b.clave) && !['tipo_original', 'origen'].includes(b.clave)).flatMap((b) => b.lineas);
     const cambioTipo = n.crudo && n.crudo !== n.tipoN;
     const cab = [
@@ -310,7 +322,7 @@ export function planificar({ origen, tipo, root, hoy, adjuntos = true }) {
     const nota = cambioTipo ? (MAPA_TIPOS[n.crudo] ? `type ${n.crudo} → ${n.tipoN}` : `type ${n.crudo} desconocido → ${n.tipoN}`) : '';
     items.push({
       origen: n.f.rel, origenAbs: n.f.abs, sha: sha256(n.raw), tipo: n.tipoN, destino: n.abs,
-      accion: n.directo ? 'directo' : 'borrador', contenido: `${cab}\n${cuerpo}\n`, nota,
+      accion: n.directo || n.promover ? 'directo' : 'borrador', promover: n.promover, contenido: `${cab}\n${cuerpo}\n`, nota,
     });
   }
   for (const a of adj) {
@@ -336,7 +348,22 @@ function asegurarDentro(rootReal, abs) {
 export function aplicar(plan, root, hoy) {
   const rootReal = plan.rootReal;
   const hechos = [];
+  // Lo que se promueve se valida entero antes de escribir nada.
+  const cfg = plan.cfg;
+  for (const it of plan.items.filter((x) => x.promover)) {
+    const fm = parseFrontmatter(it.contenido);
+    const fallos = validateKit({ data: fm.data, hasFrontmatter: fm.hasFrontmatter }, cfg);
+    if (fallos.length) throw new Error(`ficha inválida en ${it.origen}, no se ha escrito nada: ${fallos.join('; ')}`);
+  }
   for (const it of plan.items) {
+    if (it.promover) {
+      if (!dentro(path.resolve(root), it.destino)) throw new Error(`destino fuera de la raíz: ${it.destino}`);
+      asegurarDentro(rootReal, it.destino);
+      const fm = parseFrontmatter(it.contenido);
+      escribirNotaKit(root, { file: it.destino, content: it.contenido, body: fm.body, data: fm.data, hasFrontmatter: true }, cfg, hoy, it.destino);
+      hechos.push(it);
+      continue;
+    }
     if (!dentro(path.resolve(root), it.destino)) throw new Error(`destino fuera de la raíz: ${it.destino}`);
     asegurarDentro(rootReal, it.destino);
     fs.mkdirSync(path.dirname(it.destino), { recursive: true });

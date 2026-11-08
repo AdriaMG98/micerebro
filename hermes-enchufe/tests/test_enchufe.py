@@ -31,7 +31,7 @@ def prov(enchufe, tmp_path, monkeypatch):
         if not p.ok:
             raise RuntimeError("okf caído")
         p.calls["guardar"].append((tipo, titulo, cuerpo))
-        return "OKF: borrador guardado"
+        return "OKF: guardado memoria/x.md"
 
     monkeypatch.setattr(enchufe, "_run_okf_buscar", buscar)
     monkeypatch.setattr(enchufe, "_run_okf_guardar", guardar)
@@ -146,13 +146,15 @@ def test_integracion_okf_real(enchufe, tmp_path, monkeypatch):
     p.initialize("s1", hermes_home=str(home), agent_context="primary")
     p.on_memory_write("add", "user", "El usuario prefiere el café sin azúcar por las mañanas")
     p.shutdown()
-    borradores = list((ctx / "borradores").glob("*.md"))
-    assert len(borradores) == 1
-    txt = borradores[0].read_text(encoding="utf-8")
+    # guardar.modo «directo» (el del kit): la nota queda ya promovida, no en borradores/
+    notas = list((ctx / "aprendizajes").glob("*.md"))
+    assert len([n for n in notas if n.name != "index.md"]) == 1
+    assert not (ctx / "borradores").exists()
+    txt = next(n for n in notas if n.name != "index.md").read_text(encoding="utf-8")
     assert "type: aprendizaje" in txt and "origen: hermes/atencion" in txt
     assert not (home / "enchufe-pendientes.jsonl").exists()
-    # okf buscar real contra el árbol temporal no revienta (los borradores no puntúan por defecto)
-    assert isinstance(enchufe._run_okf_buscar("café sin azúcar"), str)
+    # y buscable al instante
+    assert "café sin azúcar" in enchufe._run_okf_buscar("café sin azúcar")
 
 
 # -- ronda de arreglos ---------------------------------------------------------
@@ -286,9 +288,9 @@ def test_sin_okf_root_el_enchufe_deduce_la_raiz(enchufe, tmp_path, monkeypatch):
     monkeypatch.setattr(enchufe, "__file__", str(raiz / ".okf" / "hermes-enchufe" / "__init__.py"))
     monkeypatch.setenv("ENCHUFE_OKF_PATH", str(raiz / ".okf" / "okf"))
     texto = enchufe._run_okf_guardar("nota", "Apunte de prueba", "cuerpo del apunte")
-    borradores = list((raiz / "memoria" / "borradores").glob("*.md"))
-    assert len(borradores) == 1
-    assert str(borradores[0]) in texto  # el mensaje dice dónde cayó
+    notas = [n for n in (raiz / "memoria").glob("*.md") if n.name != "index.md"]
+    assert len(notas) == 1
+    assert str(notas[0]) in texto  # el mensaje dice dónde cayó
     assert list(ajeno.iterdir()) == []  # nada en el cwd ajeno
 
 
