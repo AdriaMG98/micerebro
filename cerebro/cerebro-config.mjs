@@ -1,6 +1,6 @@
-// okf-config — rutas, fuentes y tipos de okf, configurables por raíz.
+// cerebro-config — rutas, fuentes y tipos de MiCerebro, configurables por raíz.
 // Cero dependencias. Un preset (`micerebro`, la estructura del kit) y un
-// `okf.config.json` opcional en la raíz que elige preset y sobrescribe campos:
+// `cerebro.config.json` opcional en la raíz que elige preset y sobrescribe campos:
 //
 //   { "preset": "micerebro", "tipos": ["nota", "decision"], "tipoDefecto": "nota" }
 //
@@ -11,20 +11,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const FICHERO_CONFIG = 'okf.config.json';
+export const FICHERO_CONFIG = 'cerebro.config.json';
 
-// Raíz por defecto: OKF_ROOT; si no, el ancestro del cwd (él incluido) que trae
-// okf.config.json; si no, el cwd. NUNCA se deriva de dónde está este fichero:
+// Raíz por defecto: CEREBRO_ROOT; si no, el ancestro del cwd (él incluido) que trae
+// cerebro.config.json; si no, el cwd. NUNCA se deriva de dónde está este fichero:
 // el código puede vivir en cualquier sitio (o dentro de otro repo) y la raíz de
 // la memoria es la de quien lo invoca. (--root manda sobre todo esto, en los llamadores.)
 export function defaultRoot() {
   return resolverRaiz().root;
 }
 
-// Como defaultRoot, pero dice de dónde salió: 'env' (OKF_ROOT), 'config' (okf.config.json
+// Como defaultRoot, pero dice de dónde salió: 'env' (CEREBRO_ROOT), 'config' (cerebro.config.json
 // subiendo desde el cwd) o 'cwd' (último recurso: sin pista alguna de dónde está el cerebro).
 export function resolverRaiz() {
-  if (process.env.OKF_ROOT) return { root: path.resolve(process.env.OKF_ROOT), origen: 'env' };
+  if (process.env.CEREBRO_ROOT) return { root: path.resolve(process.env.CEREBRO_ROOT), origen: 'env' };
   let d = process.cwd();
   for (;;) {
     if (fs.existsSync(path.join(d, FICHERO_CONFIG))) return { root: d, origen: 'config' };
@@ -40,7 +40,7 @@ export function resolverRaiz() {
 // `explicita`: la raíz vino de --root. Lanza un Error claro; sin él, la raíz es válida.
 export function exigirCerebro({ root, origen }, explicita = false) {
   if (explicita || origen !== 'cwd') return;
-  throw new Error(`no encuentro tu cerebro: falta ${FICHERO_CONFIG} en ${root} ni en ninguna carpeta superior; define OKF_ROOT o usa --root`);
+  throw new Error(`no encuentro tu cerebro: falta ${FICHERO_CONFIG} en ${root} ni en ninguna carpeta superior; define CEREBRO_ROOT o usa --root`);
 }
 
 // Directorios que ningún walker debe recorrer: código compilado, dependencias
@@ -70,10 +70,10 @@ function presetMiCerebro() {
     caducables: ['memoria', 'proyectos', 'areas', 'recursos'],
     fuentes: dirs.map((d) => ({ dir: d, depth: 5, source: d, ...comunes })),
     // modo: 'directo' (la nota nace promovida: ficha validada, carpeta de su type, index.md y log.md; sin revisor),
-    // 'borrador' (memoria/borradores/, la promueve okf-revisor) o 'indice' (destinos propios con índice).
+    // 'borrador' (memoria/borradores/, la promueve cerebro-revisor) o 'indice' (destinos propios con índice).
     guardar: { modo: 'directo', defecto: null, destinos: {} },
     leer: { dirs, ignorarFicheros: ['index.md', 'log.md'] },
-    // okf-revisor: mueve cada borrador a la carpeta de su type,
+    // cerebro-revisor: mueve cada borrador a la carpeta de su type,
     // añade su línea al index.md de esa carpeta y una entrada `* **Creación**` al log.md de la raíz.
     // `datados`: los types cuyo fichero lleva el prefijo AAAA-MM-DD-. Los dudosos solo salen por consola.
     revisor: {

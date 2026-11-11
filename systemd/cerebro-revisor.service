@@ -1,10 +1,10 @@
 [Unit]
-Description=Revisor de borradores de MiCerebro (okf)
+Description=Revisor de borradores de MiCerebro
 
 [Service]
 Type=oneshot
 # Ajusta las dos rutas: dónde clonaste el kit y dónde está tu cerebro. %h = tu carpeta personal.
-Environment=OKF_ROOT=%h/MiCerebro
-ExecStart=/usr/bin/env node %h/okf-kit/okf/okf-revisor.mjs
+Environment=CEREBRO_ROOT=%h/MiCerebro
+ExecStart=/usr/bin/env node %h/cerebro-kit/cerebro/cerebro-revisor.mjs
 # Añade --no-commit o --no-push a ExecStart si no quieres que toque git.
 TimeoutStartSec=300

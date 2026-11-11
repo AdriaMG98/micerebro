@@ -154,7 +154,7 @@ function main() {
   if (a.deshacer) return deshacer(path.resolve(a.deshacer));
 
   const cerebro = barras(path.resolve(a.cerebro));
-  for (const f of ['.okf/okf/okf-mcp.mjs', '.okf/okf/okf.mjs']) {
+  for (const f of ['.cerebro/cerebro/cerebro-mcp.mjs', '.cerebro/cerebro/cerebro.mjs']) {
     if (!fs.existsSync(`${cerebro}/${f}`)) { console.error(`No encuentro ${cerebro}/${f}: ¿es esa la carpeta del cerebro?`); return 1; }
   }
   const nodo = barras(a.node || process.execPath);
@@ -177,12 +177,12 @@ function main() {
   }
 
   const dirSkills = `${cerebro}/.hermes/skills`;
-  const okfMjs = `${cerebro}/.okf/okf/okf.mjs`;
-  const mcp = { command: nodo, args: [`${cerebro}/.okf/okf/okf-mcp.mjs`], env: { OKF_ROOT: cerebro } };
+  const cerebroMjs = `${cerebro}/.cerebro/cerebro/cerebro.mjs`;
+  const mcp = { command: nodo, args: [`${cerebro}/.cerebro/cerebro/cerebro-mcp.mjs`], env: { CEREBRO_ROOT: cerebro } };
   const envDeseado = {
-    OKF_ROOT: cerebro,
-    ENCHUFE_OKF_PATH: `${cerebro}/.okf/okf`,
-    ENCHUFE_OKF_CMD: `${conComillas(nodo)} ${conComillas(okfMjs)}`,
+    CEREBRO_ROOT: cerebro,
+    ENCHUFE_CEREBRO_PATH: `${cerebro}/.cerebro/cerebro`,
+    ENCHUFE_CEREBRO_CMD: `${conComillas(nodo)} ${conComillas(cerebroMjs)}`,
   };
 
   // Claves de config.yaml: [clave, valor deseado | función(actual) -> valor deseado]
@@ -196,7 +196,7 @@ function main() {
   };
   const claves = [
     ['memory.provider', NOMBRE],
-    ['mcp_servers.okf', mcp],
+    ['mcp_servers.cerebro', mcp],
     ['skills.external_dirs', dirs],
     ['skills.create_dir', dirSkills],
     ['skills.project_discovery', false],
@@ -231,7 +231,7 @@ function main() {
   let fallos = 0;
   for (const x of acciones) {
     if (x.hecho) { console.log(`ya estaba: ${x.nombre}`); continue; }
-    const resumen = x.nombre === 'mcp_servers.okf' ? `command=${x.valor.command}` : JSON.stringify(x.valor);
+    const resumen = x.nombre === 'mcp_servers.cerebro' ? `command=${x.valor.command}` : JSON.stringify(x.valor);
     if (!a.aplicar) { console.log(`se pondría: ${x.nombre} = ${resumen}`); continue; }
     const r = hermes(bin, x.args);
     if (r.code === 0) console.log(`puesto: ${x.nombre} = ${resumen}`);

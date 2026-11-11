@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// Test de caja negra de `okf caducados`: monta un workspace de mentira en un
+// Test de caja negra de `cerebro caducados`: monta un workspace de mentira en un
 // temporal, escribe notas concretas y comprueba qué marca como enlace roto.
 // Cubre el falso positivo de sintaxis de código (bash `[[ ... ]]` entre
 // backticks, o un wikilink de ejemplo documentado) leída como wikilink real
 //
-// Uso: node okf-caducados.test.mjs   (exit 0 = verde, 1 = rojo)
+// Uso: node cerebro-caducados.test.mjs   (exit 0 = verde, 1 = rojo)
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -13,11 +13,11 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const aqui = path.dirname(fileURLToPath(import.meta.url));
-const okf = path.join(aqui, 'okf.mjs');
+const cerebroCli = path.join(aqui, 'cerebro.mjs');
 const hoy = new Date().toISOString().slice(0, 10);
 
 function montarWorkspace() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'okf-caducados-test-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cerebro-caducados-test-'));
   const mkdir = (rel) => fs.mkdirSync(path.join(root, rel), { recursive: true });
   mkdir('memoria');
   return root;
@@ -32,7 +32,7 @@ function escribirNota(root, nombre, cuerpo) {
 }
 
 function correrCaducados(root) {
-  const res = spawnSync(process.execPath, [okf, 'caducados', '--root', root], { encoding: 'utf8' });
+  const res = spawnSync(process.execPath, [cerebroCli, 'caducados', '--root', root], { encoding: 'utf8' });
   return `${res.stdout}${res.stderr}`;
 }
 
@@ -75,7 +75,7 @@ fs.rmSync(root, { recursive: true, force: true });
 
 // Simula la carrera con el revisor: una nota existe cuando
 // buildCatalog la cataloga, pero desaparece antes de que cmdCaducados haga su
-// propio `statSync` en el bucle. Como el proceso de okf.mjs es un único
+// propio `statSync` en el bucle. Como el proceso de cerebro.mjs es un único
 // spawnSync, no podemos borrar el fichero "a mitad" desde fuera; en su lugar
 // precargamos un hook (--import) que intercepta `fs.statSync` y, la primera
 // vez que se le pida el stat de la nota marcada, borra el fichero y relanza
@@ -84,7 +84,7 @@ fs.rmSync(root, { recursive: true, force: true });
   const root2 = montarWorkspace();
   escribirNota(root2, 'nota-que-desaparece-en-la-carrera', 'Cuerpo sin wikilinks ni nada especial.');
   const notaPath = path.join(root2, 'memoria', 'nota-que-desaparece-en-la-carrera.md');
-  const hook = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'okf-race-hook-')), 'hook.mjs');
+  const hook = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'cerebro-race-hook-')), 'hook.mjs');
   fs.writeFileSync(
     hook,
     [
@@ -103,7 +103,7 @@ fs.rmSync(root, { recursive: true, force: true });
   );
   const res = spawnSync(
     process.execPath,
-    [`--import=${hook}`, okf, 'caducados', '--root', root2],
+    [`--import=${hook}`, cerebroCli, 'caducados', '--root', root2],
     { encoding: 'utf8' }
   );
   const salida = `${res.stdout}${res.stderr}`;

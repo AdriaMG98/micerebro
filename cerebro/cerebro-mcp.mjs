@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// okf-mcp — servidor MCP por stdio para la memoria curada OKF.
+// cerebro-mcp — servidor MCP por stdio para la memoria curada MiCerebro.
 // Cero dependencias externas: envuelve el CLI existente sin duplicar su lógica.
 'use strict';
 
@@ -8,11 +8,11 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
-import { cargarConfig, resolverRaiz, exigirCerebro, fichaBorradorKit } from './okf-config.mjs';
-import { guardarDirecto } from './okf-promover.mjs';
+import { cargarConfig, resolverRaiz, exigirCerebro, fichaBorradorKit } from './cerebro-config.mjs';
+import { guardarDirecto } from './cerebro-promover.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// Rutas y tipos salen de la config activa (okf-config.mjs).
+// Rutas y tipos salen de la config activa (cerebro-config.mjs).
 
 function slugify(title) {
   let s = String(title).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -23,12 +23,12 @@ function slugify(title) {
 function atomicWrite(filePath, content) {
   const dir = path.dirname(filePath);
   fs.mkdirSync(dir, { recursive: true });
-  const tmp = path.join(dir, `.okf-mcp-tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const tmp = path.join(dir, `.cerebro-mcp-tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   fs.writeFileSync(tmp, content, 'utf8');
   fs.renameSync(tmp, filePath);
 }
 
-// YAML-lite: basta para los campos planos que usa el contexto OKF.
+// YAML-lite: basta para los campos planos que usa el contexto MiCerebro.
 function parseFrontmatter(content) {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
   if (!match) return { data: {}, body: content };
@@ -71,14 +71,14 @@ function textResult(text, isError = false) {
   return result;
 }
 
-function runOkf(root, args, input) {
-  const result = spawnSync(process.execPath, [path.join(__dirname, 'okf.mjs'), ...args, '--root', root], {
+function runCerebro(root, args, input) {
+  const result = spawnSync(process.execPath, [path.join(__dirname, 'cerebro.mjs'), ...args, '--root', root], {
     input,
     encoding: 'utf8',
     cwd: root,
   });
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error((result.stderr || result.stdout || 'okf terminó con error').trim());
+  if (result.status !== 0) throw new Error((result.stderr || result.stdout || 'MiCerebro terminó con error').trim());
   return result.stdout;
 }
 
@@ -94,15 +94,15 @@ function guardar(root, config, args) {
   if (!config.tiposSet.has(tipo)) throw new Error(`tipo inválido "${tipo}"`);
   if (config.guardar.modo === 'directo') {
     const fichero = guardarDirecto(root, config, { tipo, titulo, cuerpo, fecha: today() });
-    return `OKF: guardado ${path.relative(root, fichero)} (${fichero})`;
+    return `MiCerebro: guardado ${path.relative(root, fichero)} (${fichero})`;
   }
-  // En modo borrador, todo okf_guardar nace borrador: el revisor es la única puerta a la nota publicada.
+  // En modo borrador, todo cerebro_guardar nace borrador: el revisor es la única puerta a la nota publicada.
   const slug = slugify(titulo);
   let nombre = slug;
   for (let n = 2; fs.existsSync(path.join(config.borradoresDir, `${nombre}.md`)); n++) nombre = `${slug}-${n}`;
   const destino = path.join(config.borradoresDir, `${nombre}.md`);
   atomicWrite(destino, fichaBorradorKit({ tipo, titulo, cuerpo, fecha: today() }));
-  return `OKF: borrador guardado ${path.relative(root, destino)} (${destino})`;
+  return `MiCerebro: borrador guardado ${path.relative(root, destino)} (${destino})`;
 }
 
 function buildTools(config) {
@@ -110,20 +110,20 @@ function buildTools(config) {
     ? `Guarda una nota ya promovida (en la carpeta de su tipo, con index.md y log.md): buscable al instante, sin revisor. Tipos: ${config.tipos.join(', ')}${config.tipoDefecto ? ` (por defecto ${config.tipoDefecto})` : ''}.`
     : `Guarda una nota SIEMPRE como borrador (${path.relative(config.root, config.borradoresDir)}/), sin indexar: la promueve el revisor. Tipos: ${config.tipos.join(', ')}${config.tipoDefecto ? ` (por defecto ${config.tipoDefecto})` : ''}.`;
   return [
-    { name: 'okf_buscar', description: 'Busca contexto curado con la escalera determinista OKF.', inputSchema: { type: 'object', properties: { pregunta: { type: 'string' } }, required: ['pregunta'], additionalProperties: false } },
-    { name: 'okf_leer', description: `Lee una nota de contexto por ${config.campoNombre} o por fichero.`, inputSchema: { type: 'object', properties: { nombre: { type: 'string' } }, required: ['nombre'], additionalProperties: false } },
-    { name: 'okf_listar', description: 'Lista nombres, tipos y descripciones del contexto curado.', inputSchema: { type: 'object', properties: { tipo: { type: 'string', enum: config.tipos } }, additionalProperties: false } },
-    { name: 'okf_guardar', description: descGuardar, inputSchema: { type: 'object', properties: { tipo: { type: 'string', enum: config.tipos }, titulo: { type: 'string' }, cuerpo: { type: 'string' } }, required: config.tipoDefecto ? ['titulo', 'cuerpo'] : ['tipo', 'titulo', 'cuerpo'], additionalProperties: false } },
-    { name: 'okf_caducados', description: 'Informa notas caducadas y enlaces rotos.', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
+    { name: 'cerebro_buscar', description: 'Busca contexto curado con la escalera determinista MiCerebro.', inputSchema: { type: 'object', properties: { pregunta: { type: 'string' } }, required: ['pregunta'], additionalProperties: false } },
+    { name: 'cerebro_leer', description: `Lee una nota de contexto por ${config.campoNombre} o por fichero.`, inputSchema: { type: 'object', properties: { nombre: { type: 'string' } }, required: ['nombre'], additionalProperties: false } },
+    { name: 'cerebro_listar', description: 'Lista nombres, tipos y descripciones del contexto curado.', inputSchema: { type: 'object', properties: { tipo: { type: 'string', enum: config.tipos } }, additionalProperties: false } },
+    { name: 'cerebro_guardar', description: descGuardar, inputSchema: { type: 'object', properties: { tipo: { type: 'string', enum: config.tipos }, titulo: { type: 'string' }, cuerpo: { type: 'string' } }, required: config.tipoDefecto ? ['titulo', 'cuerpo'] : ['tipo', 'titulo', 'cuerpo'], additionalProperties: false } },
+    { name: 'cerebro_caducados', description: 'Informa notas caducadas y enlaces rotos.', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
   ];
 }
 
 function callTool(root, config, name, args) {
   try {
-    if (name === 'okf_buscar') {
-      return textResult(runOkf(root, ['buscar', requireString(args, 'pregunta')]));
+    if (name === 'cerebro_buscar') {
+      return textResult(runCerebro(root, ['buscar', requireString(args, 'pregunta')]));
     }
-    if (name === 'okf_leer') {
+    if (name === 'cerebro_leer') {
       const nombre = requireString(args, 'nombre');
       const wantedFile = nombre.endsWith('.md') ? nombre : `${nombre}.md`;
       for (const dir of config.leer.dirs) {
@@ -135,7 +135,7 @@ function callTool(root, config, name, args) {
       }
       throw new Error(`no existe la nota '${nombre}'`);
     }
-    if (name === 'okf_listar') {
+    if (name === 'cerebro_listar') {
       if (args?.tipo !== undefined && !config.tiposSet.has(args.tipo)) throw new Error(`tipo inválido "${args.tipo}"`);
       const lines = [];
       const ficheros = config.leer.dirs.flatMap((dir) => listMdFiles(dir).sort());
@@ -147,11 +147,11 @@ function callTool(root, config, name, args) {
       }
       return textResult(lines.join('\n'));
     }
-    if (name === 'okf_guardar') {
+    if (name === 'cerebro_guardar') {
       exigirCerebro(infoRaiz);
       return textResult(guardar(root, config, args));
     }
-    if (name === 'okf_caducados') return textResult(runOkf(root, ['caducados']));
+    if (name === 'cerebro_caducados') return textResult(runCerebro(root, ['caducados']));
     return textResult(`tool desconocida: ${name}`, true);
   } catch (error) {
     return textResult(error.message, true);
@@ -166,7 +166,7 @@ function respondError(id, code, message) {
   process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, error: { code, message } }) + '\n');
 }
 
-// Raíz: --root > OKF_ROOT > okf.config.json hacia arriba desde el cwd > cwd.
+// Raíz: --root > CEREBRO_ROOT > cerebro.config.json hacia arriba desde el cwd > cwd.
 const rootIdx = process.argv.indexOf('--root');
 const rootFlag = rootIdx >= 0 && process.argv[rootIdx + 1];
 const infoRaiz = rootFlag ? { root: path.resolve(rootFlag), origen: 'flag' } : resolverRaiz();
@@ -191,7 +191,7 @@ process.stdin.on('data', (chunk) => {
       } else if (request.method === 'notifications/initialized') {
         // Notificación MCP: no lleva respuesta.
       } else if (request.method === 'initialize') {
-        if (!notification) respond(request.id, { protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'okf', version: '1.0.0' } });
+        if (!notification) respond(request.id, { protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'cerebro', version: '1.0.0' } });
       } else if (request.method === 'ping') {
         if (!notification) respond(request.id, {});
       } else if (request.method === 'tools/list') {

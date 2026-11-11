@@ -47,8 +47,8 @@ function entorno({ cerebroNombre = 'cerebro', config } = {}) {
   const falso = path.join(raiz, 'hermes-falso');
   fs.writeFileSync(falso, FALSO, { mode: 0o755 });
   const cerebro = path.join(raiz, cerebroNombre);
-  fs.mkdirSync(path.join(cerebro, '.okf', 'okf'), { recursive: true });
-  for (const f of ['okf.mjs', 'okf-mcp.mjs']) fs.writeFileSync(path.join(cerebro, '.okf', 'okf', f), '');
+  fs.mkdirSync(path.join(cerebro, '.cerebro', 'cerebro'), { recursive: true });
+  for (const f of ['cerebro.mjs', 'cerebro-mcp.mjs']) fs.writeFileSync(path.join(cerebro, '.cerebro', 'cerebro', f), '');
   const correr = (...extra) => {
     const r = spawnSync(process.execPath, [INSTALADOR, '--cerebro', cerebro, '--hermes', falso, ...extra],
       { encoding: 'utf8', env: { ...process.env, FAKE_HOME: home } });
@@ -86,12 +86,12 @@ test('aplicar dos veces: la segunda es «ya estaba» y no escribe', () => {
   const c = e.leerCfg();
   const cer = posix(e.cerebro);
   assert.equal(c.memory.provider, 'enchufe');
-  assert.deepEqual(c.mcp_servers.okf, { command: posix(process.execPath), args: [`${cer}/.okf/okf/okf-mcp.mjs`], env: { OKF_ROOT: cer } });
+  assert.deepEqual(c.mcp_servers.cerebro, { command: posix(process.execPath), args: [`${cer}/.cerebro/cerebro/cerebro-mcp.mjs`], env: { CEREBRO_ROOT: cer } });
   assert.deepEqual(c.skills.external_dirs, [`${cer}/.hermes/skills`]);
   assert.equal(c.skills.create_dir, `${cer}/.hermes/skills`);
   assert.deepEqual(c.plugins.enabled, ['vigilante-contexto']);
   const env = fs.readFileSync(path.join(e.home, '.env'), 'utf8');
-  assert.match(env, new RegExp(`^OKF_ROOT=${cer.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'));
+  assert.match(env, new RegExp(`^CEREBRO_ROOT=${cer.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'));
   assert.ok(fs.lstatSync(path.join(e.home, 'plugins', 'enchufe')).isSymbolicLink());
   assert.ok(fs.readdirSync(path.join(e.home, 'backups')).some((d) => d.startsWith('enchufe-')));
   assert.ok(!fs.readFileSync(path.join(e.home, 'config.yaml'), 'utf8').includes('RUTA-DE-TU-CEREBRO'));
@@ -115,17 +115,17 @@ test('skills.external_dirs y plugins.enabled existentes se conservan', () => {
   e.limpiar();
 });
 
-test('ruta con espacios: ENCHUFE_OKF_CMD entrecomillado y partible como shell POSIX', () => {
+test('ruta con espacios: ENCHUFE_CEREBRO_CMD entrecomillado y partible como shell POSIX', () => {
   const e = entorno({ cerebroNombre: 'mi cerebro', config: {} });
   const r = e.correr('--aplicar');
   assert.equal(r.code, 0, r.err);
-  const envSet = e.sets().find((a) => a[2] === 'ENCHUFE_OKF_CMD');
+  const envSet = e.sets().find((a) => a[2] === 'ENCHUFE_CEREBRO_CMD');
   const cer = posix(e.cerebro);
-  assert.ok(envSet[3].includes(`"${cer}/.okf/okf/okf.mjs"`), envSet[3]);
+  assert.ok(envSet[3].includes(`"${cer}/.cerebro/cerebro/cerebro.mjs"`), envSet[3]);
   // partido como hace __init__.py (shlex posix): dos tokens, el segundo con el espacio intacto
   const py = spawnSync('python3', ['-c', 'import shlex,sys;print(shlex.split(sys.argv[1],posix=True))', envSet[3]], { encoding: 'utf8' });
-  if (py.status === 0) assert.match(py.stdout, /okf\.mjs'\]/), assert.ok(py.stdout.includes('mi cerebro'));
-  assert.equal(e.leerCfg().mcp_servers.okf.env.OKF_ROOT, cer);
+  if (py.status === 0) assert.match(py.stdout, /cerebro\.mjs'\]/), assert.ok(py.stdout.includes('mi cerebro'));
+  assert.equal(e.leerCfg().mcp_servers.cerebro.env.CEREBRO_ROOT, cer);
   assert.equal(e.leerCfg().skills.create_dir, `${cer}/.hermes/skills`);
   // y la segunda pasada reconoce el valor con comillas del .env
   const n = e.sets().length;

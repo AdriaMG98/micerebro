@@ -1,5 +1,5 @@
 ---
-okf_version: 0.2
+cerebro_version: 0.2
 ---
 # MiCerebro
 

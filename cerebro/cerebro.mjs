@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-// okf — CLI determinista de recuperación/alta/limpieza de memoria curada (OKF).
+// cerebro — CLI determinista de recuperación/alta/limpieza de memoria curada (MiCerebro).
 // Cero dependencias externas: solo módulos internos de Node (fs, path, child_process, os).
 'use strict';
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { cargarConfig, resolverRaiz, exigirCerebro, fichaBorradorKit } from './okf-config.mjs';
-import { guardarDirecto } from './okf-promover.mjs';
+import { cargarConfig, resolverRaiz, exigirCerebro, fichaBorradorKit } from './cerebro-config.mjs';
+import { guardarDirecto } from './cerebro-promover.mjs';
 
-// Rutas, fuentes y tipos salen de la config activa (okf-config.mjs:
-// preset `micerebro`, o lo que diga okf.config.json en la raíz).
+// Rutas, fuentes y tipos salen de la config activa (cerebro-config.mjs:
+// preset `micerebro`, o lo que diga cerebro.config.json en la raíz).
 
 // ── utilidades de texto ─────────────────────────────────────────────────────
 const STOPWORDS = new Set([
@@ -44,7 +44,7 @@ function tokenize(s) {
 }
 
 // ── frontmatter YAML-lite (sin dependencias) ────────────────────────────────
-// Solo entiende lo que OKF necesita: claves de primer nivel `k: v` y un bloque
+// Solo entiende lo que MiCerebro necesita: claves de primer nivel `k: v` y un bloque
 // anidado de un nivel (`type` dentro de `metadata:`).
 function stripQuotes(s) {
   s = s.trim();
@@ -416,7 +416,7 @@ function cmdBuscar(root, config, query, debug, includeAll) {
   let { candidates } = buildCatalog(root, config);
   const queryTokens = tokenize(query);
   if (queryTokens.length === 0) {
-    console.log('OKF: la pregunta no dejó ninguna palabra clave tras quitar vacías.');
+    console.log('MiCerebro: la pregunta no dejó ninguna palabra clave tras quitar vacías.');
     return;
   }
 
@@ -469,7 +469,7 @@ function cmdBuscar(root, config, query, debug, includeAll) {
 
   if (scored.length === 0) {
     let msg =
-      `OKF: 0 aciertos entre ${candidates.length} candidatos (palabras: ${queryTokens.join(', ')}). ` +
+      `MiCerebro: 0 aciertos entre ${candidates.length} candidatos (palabras: ${queryTokens.join(', ')}). ` +
       `Nada que abrir — revisa el índice a mano o reformula.`;
     if (excludedHits.length > 0) {
       msg +=
@@ -502,7 +502,7 @@ function cmdBuscar(root, config, query, debug, includeAll) {
   // Se calcula aquí para que el header pueda mencionarlos solo si los hay.
   const alts = scored.slice(1, 3).filter((x) => x.score > 0);
   let header =
-    `OKF: leídos ~${readBytes} caracteres (1 sección${linked ? ' + 1 enlace seguido' : ''} de 1 fichero) ` +
+    `MiCerebro: leídos ~${readBytes} caracteres (1 sección${linked ? ' + 1 enlace seguido' : ''} de 1 fichero) ` +
     `de ${scored.length}/${candidates.length} candidatos con acierto · descartados ~${discardedBytes} caracteres sin abrir`;
   if (alts.length > 0) {
     const plural = alts.length > 1 ? 's' : '';
@@ -528,7 +528,7 @@ function cmdBuscar(root, config, query, debug, includeAll) {
 
   if (alts.length > 0) {
     lines.push('');
-    lines.push('También relevantes (abrir con okf_leer si hace falta):');
+    lines.push('También relevantes (abrir con cerebro_leer si hace falta):');
     alts.forEach((x, i) => {
       const num = i + 2;
       const relPath = path.relative(root, x.c.path);
@@ -553,7 +553,7 @@ function slugify(title) {
 function atomicWrite(filePath, content) {
   const dir = path.dirname(filePath);
   fs.mkdirSync(dir, { recursive: true });
-  const tmp = path.join(dir, `.okf-tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const tmp = path.join(dir, `.cerebro-tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   fs.writeFileSync(tmp, content, 'utf8');
   fs.renameSync(tmp, filePath); // rename es atómico en el mismo filesystem
 }
@@ -589,7 +589,7 @@ function cmdGuardar(root, config, argv) {
     tipo = config.tipoDefecto;
   }
   if (!tipo || !titulo) {
-    throw new Error(`uso: okf guardar ${config.tipoDefecto ? '[tipo] ' : '<tipo> '}"titulo" --body -   (tipo: ${config.tipos.join('|')})`);
+    throw new Error(`uso: cerebro guardar ${config.tipoDefecto ? '[tipo] ' : '<tipo> '}"titulo" --body -   (tipo: ${config.tipos.join('|')})`);
   }
   if (!config.tiposSet.has(tipo)) {
     throw new Error(`tipo inválido "${tipo}" — válidos: ${config.tipos.join(', ')}`);
@@ -607,9 +607,9 @@ function cmdGuardar(root, config, argv) {
   if (!body) throw new Error('el body está vacío');
 
   if (config.guardar.modo === 'directo') {
-    // Kit sin revisor: misma validación y misma escritura que la promoción (okf-promover).
+    // Kit sin revisor: misma validación y misma escritura que la promoción (cerebro-promover).
     const fichero = guardarDirecto(root, config, { tipo, titulo, cuerpo: body, fecha: new Date().toISOString().slice(0, 10) });
-    console.log(`OKF: guardado ${path.relative(root, fichero)} (${fichero})`);
+    console.log(`MiCerebro: guardado ${path.relative(root, fichero)} (${fichero})`);
     return;
   }
 
@@ -624,7 +624,7 @@ function cmdGuardar(root, config, argv) {
     }
     const fichero = path.join(dirB, `${slug}.md`);
     atomicWrite(fichero, fichaBorradorKit({ tipo, titulo, cuerpo: body, fecha: new Date().toISOString().slice(0, 10) }));
-    console.log(`OKF: borrador guardado ${path.relative(root, fichero)}`);
+    console.log(`MiCerebro: borrador guardado ${path.relative(root, fichero)}`);
     return;
   }
 
@@ -668,8 +668,8 @@ function cmdGuardar(root, config, argv) {
     throw new Error(`fallo al actualizar el índice, se deshizo el fichero creado (rollback): ${e.message}`);
   }
 
-  console.log(`OKF: guardado ${path.relative(root, targetFile)}`);
-  console.log(`OKF: índice actualizado ${path.relative(root, indexPath)}`);
+  console.log(`MiCerebro: guardado ${path.relative(root, targetFile)}`);
+  console.log(`MiCerebro: índice actualizado ${path.relative(root, indexPath)}`);
 }
 
 // ── comando: caducados ──────────────────────────────────────────────────
@@ -737,8 +737,8 @@ function cmdCaducados(root, config) {
     try {
       stat = fs.statSync(c.path);
     } catch {
-      // Carrera con el revisor okf: el fichero desapareció entre buildCatalog
-      // y este stat (renombrado/borrado por una variante -N de okf_guardar).
+      // Carrera con el revisor MiCerebro: el fichero desapareció entre buildCatalog
+      // y este stat (renombrado/borrado por una variante -N de cerebro_guardar).
       // El stat solo es fallback de mtime (la fecha ya sale de frontmatter/git),
       // así que saltamos este candidato en vez de tumbar el comando entero.
       continue;
@@ -768,7 +768,7 @@ function cmdCaducados(root, config) {
     }
   }
 
-  console.log(`OKF caducados — política TTL ${TTL_DIAS} días (NO borra, solo lista)\n`);
+  console.log(`MiCerebro caducados — política TTL ${TTL_DIAS} días (NO borra, solo lista)\n`);
   if (partes.length === 0) {
     console.log('Nada caducado ni roto: todo el contexto curado + memoria automática está dentro del TTL y sin enlaces muertos.');
   } else {
@@ -857,13 +857,13 @@ function candidatosCurar(root, config) {
 }
 
 function cmdCurar(root, config, argv) {
-  if (!argv.candidatos) throw new Error('uso: okf curar --candidatos [--json]   (solo lista; no escribe nada)');
+  if (!argv.candidatos) throw new Error('uso: cerebro curar --candidatos [--json]   (solo lista; no escribe nada)');
   const lista = candidatosCurar(root, config);
   if (argv.json) {
     console.log(JSON.stringify(lista, null, 2));
     return;
   }
-  console.log(`OKF curar — candidatos a revisar (similitud >= ${UMBRAL_SIMILITUD}, caducada > ${DIAS_CADUCADA} días; NO escribe, solo lista)\n`);
+  console.log(`MiCerebro curar — candidatos a revisar (similitud >= ${UMBRAL_SIMILITUD}, caducada > ${DIAS_CADUCADA} días; NO escribe, solo lista)\n`);
   if (!lista.length) {
     console.log('Nada que revisar.');
     return;
@@ -912,7 +912,7 @@ function main() {
   try {
     config = cargarConfig(root);
   } catch (e) {
-    console.error(`OKF error: ${e.message}`);
+    console.error(`MiCerebro error: ${e.message}`);
     process.exitCode = 1;
     return;
   }
@@ -920,14 +920,14 @@ function main() {
   if (!sub || sub === '-h' || sub === '--help') {
     console.log(
       [
-        'okf — CLI determinista de memoria curada (OKF)',
+        'cerebro — CLI determinista de memoria curada (MiCerebro)',
         '',
-        '  okf buscar "pregunta" [--todo] [--debug]',
-        `  okf guardar ${config.tipoDefecto ? '[tipo] ' : ''}<${config.tipos.join('|')}> "titulo" --body -${Object.keys(config.guardar.destinos).length ? ` [--destino ${Object.keys(config.guardar.destinos).join('|')}]` : ''}`,
-        '  okf caducados',
-        '  okf curar --candidatos [--json]   (duplicadas, contradicciones, caducadas, enlaces rotos; solo lista)',
+        '  cerebro buscar "pregunta" [--todo] [--debug]',
+        `  cerebro guardar ${config.tipoDefecto ? '[tipo] ' : ''}<${config.tipos.join('|')}> "titulo" --body -${Object.keys(config.guardar.destinos).length ? ` [--destino ${Object.keys(config.guardar.destinos).join('|')}]` : ''}`,
+        '  cerebro caducados',
+        '  cerebro curar --candidatos [--json]   (duplicadas, contradicciones, caducadas, enlaces rotos; solo lista)',
         '',
-        `raíz actual: ${root}  (preset: ${config.preset})  (override: --root <ruta> u OKF_ROOT)`,
+        `raíz actual: ${root}  (preset: ${config.preset})  (override: --root <ruta> u CEREBRO_ROOT)`,
       ].join('\n')
     );
     return;
@@ -936,7 +936,7 @@ function main() {
   try {
     if (sub === 'buscar') {
       const query = argv._.join(' ');
-      if (!query) throw new Error('uso: okf buscar "pregunta"');
+      if (!query) throw new Error('uso: cerebro buscar "pregunta"');
       cmdBuscar(root, config, query, Boolean(argv.debug), Boolean(argv.todo));
     } else if (sub === 'guardar') {
       exigirCerebro(info);
@@ -949,7 +949,7 @@ function main() {
       throw new Error(`subcomando desconocido: ${sub}`);
     }
   } catch (e) {
-    console.error(`OKF error: ${e.message}`);
+    console.error(`MiCerebro error: ${e.message}`);
     process.exitCode = 1;
   }
 }

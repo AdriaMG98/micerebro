@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// okf-migrar — trae memoria de otros sitios a un cerebro MiCerebro, siempre por COPIA.
+// cerebro-migrar — trae memoria de otros sitios a un cerebro MiCerebro, siempre por COPIA.
 // Cero dependencias externas: solo módulos internos de Node.
 //
-// Uso: node okf-migrar.mjs --origen <ruta> [--tipo libreta|carpeta|planes|auto] [--root <ruta>]
+// Uso: node cerebro-migrar.mjs --origen <ruta> [--tipo libreta|carpeta|planes|auto] [--root <ruta>]
 //                          --dry-run | --aplicar [--sin-adjuntos] [--hoy AAAA-MM-DD]
-// Raíz: --root > OKF_ROOT > okf.config.json hacia arriba desde el cwd > cwd.
+// Raíz: --root > CEREBRO_ROOT > cerebro.config.json hacia arriba desde el cwd > cwd.
 //
 // Tres orígenes:
 //   libreta  MEMORY.md / USER.md de Hermes (entradas separadas por `§`): cada entrada es un
@@ -25,9 +25,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { resolverRaiz, exigirCerebro, cargarConfig, fichaBorradorKit } from './okf-config.mjs';
-import { parseFrontmatter } from './okf-comun.mjs';
-import { rutaBaseKit, validateKit, escribirNotaKit } from './okf-promover.mjs';
+import { resolverRaiz, exigirCerebro, cargarConfig, fichaBorradorKit } from './cerebro-config.mjs';
+import { parseFrontmatter } from './cerebro-comun.mjs';
+import { rutaBaseKit, validateKit, escribirNotaKit } from './cerebro-promover.mjs';
 
 // Mapa de tipos de otros mundos (user|feedback|project|reference, notas genéricas) → tipos del kit.
 export const MAPA_TIPOS = {
@@ -414,7 +414,7 @@ function parseArgs(argv) {
   return out;
 }
 
-const USO = `Uso: node okf-migrar.mjs --origen <ruta> [--tipo libreta|carpeta|planes|auto] [--root <ruta>] --dry-run | --aplicar
+const USO = `Uso: node cerebro-migrar.mjs --origen <ruta> [--tipo libreta|carpeta|planes|auto] [--root <ruta>] --dry-run | --aplicar
   --dry-run        inventario (qué → dónde, tipo, avisos) sin escribir nada
   --aplicar        COPIA al cerebro (nunca borra ni toca el origen, nunca pisa un destino) y deja registro/
   --sin-adjuntos   no copia lo que no sea .md
@@ -458,7 +458,7 @@ function main() {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { main(); } catch (error) {
-    console.error(`OKF migrar error: ${error.message}`);
+    console.error(`MiCerebro migrar error: ${error.message}`);
     process.exitCode = 1;
   }
 }

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-OKF_DIR = Path(__file__).resolve().parents[2] / "okf"
+CEREBRO_DIR = Path(__file__).resolve().parents[2] / "cerebro"
 
 
 @pytest.fixture
@@ -24,17 +24,17 @@ def prov(enchufe, tmp_path, monkeypatch):
     def buscar(q, timeout=8.0):
         p.calls["buscar"].append(q)
         if not p.ok:
-            raise RuntimeError("okf caído")
+            raise RuntimeError("MiCerebro caído")
         return "nota: resultado"
 
     def guardar(tipo, titulo, cuerpo, timeout=20.0):
         if not p.ok:
-            raise RuntimeError("okf caído")
+            raise RuntimeError("MiCerebro caído")
         p.calls["guardar"].append((tipo, titulo, cuerpo))
-        return "OKF: guardado memoria/x.md"
+        return "MiCerebro: guardado memoria/x.md"
 
-    monkeypatch.setattr(enchufe, "_run_okf_buscar", buscar)
-    monkeypatch.setattr(enchufe, "_run_okf_guardar", guardar)
+    monkeypatch.setattr(enchufe, "_run_cerebro_buscar", buscar)
+    monkeypatch.setattr(enchufe, "_run_cerebro_guardar", guardar)
     yield p
     p.shutdown()
 
@@ -78,7 +78,7 @@ def test_remove_no_guarda(prov):
     assert prov.calls["guardar"] == []
 
 
-def test_okf_caido_avisa_una_vez_sin_excepcion(prov):
+def test_cerebro_caido_avisa_una_vez_sin_excepcion(prov):
     prov.ok = False
     assert "no disponible" in prov.prefetch("pregunta real uno", session_id="s1")
     assert prov.prefetch("pregunta real dos", session_id="s1") == ""
@@ -102,13 +102,13 @@ def test_on_pre_compress_vacia_pendientes(prov):
 
 def test_tools(prov, enchufe):
     nombres = [s["name"] for s in prov.get_tool_schemas()]
-    assert nombres == ["okf_buscar", "okf_guardar"]
-    assert "resultado" in json.loads(prov.handle_tool_call("okf_buscar", {"pregunta": "x"}))
-    r = json.loads(prov.handle_tool_call("okf_guardar", {"tipo": "nota", "titulo": "t", "cuerpo": "c"}))
+    assert nombres == ["cerebro_buscar", "cerebro_guardar"]
+    assert "resultado" in json.loads(prov.handle_tool_call("cerebro_buscar", {"pregunta": "x"}))
+    r = json.loads(prov.handle_tool_call("cerebro_guardar", {"tipo": "nota", "titulo": "t", "cuerpo": "c"}))
     assert "resultado" in r and prov.calls["guardar"][0][2].endswith("origen: hermes/demo")
-    assert "error" in json.loads(prov.handle_tool_call("okf_guardar", {"tipo": "zzz", "titulo": "t", "cuerpo": "c"}))
+    assert "error" in json.loads(prov.handle_tool_call("cerebro_guardar", {"tipo": "zzz", "titulo": "t", "cuerpo": "c"}))
     prov.ok = False
-    assert "error" in json.loads(prov.handle_tool_call("okf_buscar", {"pregunta": "x"}))
+    assert "error" in json.loads(prov.handle_tool_call("cerebro_buscar", {"pregunta": "x"}))
 
 
 def test_gbrain_query_solo_con_env(prov, monkeypatch):
@@ -118,7 +118,7 @@ def test_gbrain_query_solo_con_env(prov, monkeypatch):
 
 
 def test_system_prompt_y_register(prov, enchufe):
-    assert "okf_buscar" in prov.system_prompt_block() and "okf_guardar" in prov.system_prompt_block()
+    assert "cerebro_buscar" in prov.system_prompt_block() and "cerebro_guardar" in prov.system_prompt_block()
     got = []
 
     class Ctx:
@@ -129,16 +129,16 @@ def test_system_prompt_y_register(prov, enchufe):
     assert got[0].name == "enchufe"
 
 
-# -- integración contra okf REAL en un OKF_ROOT temporal ----------------------
+# -- integración contra MiCerebro REAL en un CEREBRO_ROOT temporal ----------------------
 
 @pytest.mark.skipif(not shutil.which("node"), reason="sin node")
-def test_integracion_okf_real(enchufe, tmp_path, monkeypatch):
+def test_integracion_cerebro_real(enchufe, tmp_path, monkeypatch):
     root = tmp_path / "root"
     ctx = root / "memoria"
     ctx.mkdir(parents=True)
-    monkeypatch.setenv("OKF_ROOT", str(root))
-    monkeypatch.setenv("ENCHUFE_OKF_CMD", f"node {OKF_DIR / 'okf.mjs'}")
-    monkeypatch.delenv("ENCHUFE_OKF_MCP_CMD", raising=False)
+    monkeypatch.setenv("CEREBRO_ROOT", str(root))
+    monkeypatch.setenv("ENCHUFE_CEREBRO_CMD", f"node {CEREBRO_DIR / 'cerebro.mjs'}")
+    monkeypatch.delenv("ENCHUFE_CEREBRO_MCP_CMD", raising=False)
     monkeypatch.delenv("ENCHUFE_PERFIL", raising=False)
     home = tmp_path / "profiles" / "atencion"
     home.mkdir(parents=True)
@@ -154,15 +154,15 @@ def test_integracion_okf_real(enchufe, tmp_path, monkeypatch):
     assert "type: aprendizaje" in txt and "origen: hermes/atencion" in txt
     assert not (home / "enchufe-pendientes.jsonl").exists()
     # y buscable al instante
-    assert "café sin azúcar" in enchufe._run_okf_buscar("café sin azúcar")
+    assert "café sin azúcar" in enchufe._run_cerebro_buscar("café sin azúcar")
 
 
 # -- ronda de arreglos ---------------------------------------------------------
 
-def test_okf_cuelga_avisa_en_menos_de_6s(enchufe, tmp_path, monkeypatch):
+def test_cerebro_cuelga_avisa_en_menos_de_6s(enchufe, tmp_path, monkeypatch):
     import sys
     import time
-    monkeypatch.setenv("ENCHUFE_OKF_CMD", f"{sys.executable} -c 'import time; time.sleep(30)'")
+    monkeypatch.setenv("ENCHUFE_CEREBRO_CMD", f"{sys.executable} -c 'import time; time.sleep(30)'")
     monkeypatch.delenv("ENCHUFE_PERFIL", raising=False)
     p = enchufe.EnchufeMemoryProvider()
     p.initialize("s1", hermes_home=str(tmp_path))
@@ -184,13 +184,13 @@ def test_recall_status_solo_del_ultimo_prefetch(prov):
 
 def test_is_available_comprueba_mjs(enchufe, monkeypatch, tmp_path):
     p = enchufe.EnchufeMemoryProvider()
-    monkeypatch.setenv("ENCHUFE_OKF_CMD", f"node {tmp_path}/no-existe/okf.mjs")
+    monkeypatch.setenv("ENCHUFE_CEREBRO_CMD", f"node {tmp_path}/no-existe/cerebro.mjs")
     assert p.is_available() is False
-    f = tmp_path / "okf.mjs"
+    f = tmp_path / "cerebro.mjs"
     f.write_text("")
-    monkeypatch.setenv("ENCHUFE_OKF_CMD", f"node {f}")
+    monkeypatch.setenv("ENCHUFE_CEREBRO_CMD", f"node {f}")
     assert p.is_available() is True
-    monkeypatch.setenv("ENCHUFE_OKF_CMD", "wsl.exe -e node /x/okf.mjs")
+    monkeypatch.setenv("ENCHUFE_CEREBRO_CMD", "wsl.exe -e node /x/cerebro.mjs")
     assert p.is_available() is True
 
 
@@ -211,7 +211,7 @@ def test_shutdown_no_se_come_el_stop(enchufe, tmp_path, monkeypatch):
     def lento(tipo, titulo, cuerpo, timeout=20.0):
         gate.wait(3)
 
-    monkeypatch.setattr(enchufe, "_run_okf_guardar", lento)
+    monkeypatch.setattr(enchufe, "_run_cerebro_guardar", lento)
     p = enchufe.EnchufeMemoryProvider()
     p.initialize("s1", hermes_home=str(tmp_path))
     p.on_memory_write("add", "user", "uno uno uno")
@@ -235,25 +235,25 @@ def test_pre_compress_respeta_deadline(prov, enchufe, monkeypatch):
 
 
 def test_wsl_cmd_desde_ruta_unc(enchufe, monkeypatch):
-    unc = r"\\wsl.localhost\Ubuntu\srv\kit\okf\okf.mjs"
-    monkeypatch.delenv("OKF_ROOT", raising=False)
-    assert enchufe._wsl_cmd(unc) == ["wsl.exe", "-d", "Ubuntu", "--cd", "~", "-e", "node", "/srv/kit/okf/okf.mjs"]
-    monkeypatch.setenv("OKF_ROOT", "/srv/MiCerebro")
-    assert enchufe._wsl_cmd(unc) == ["wsl.exe", "-d", "Ubuntu", "--cd", "~", "-e", "env", "OKF_ROOT=/srv/MiCerebro",
-                                     "node", "/srv/kit/okf/okf.mjs"]
-    assert enchufe._wsl_cmd(r"C:\hermes\plugins\enchufe\okf.mjs") == []
+    unc = r"\\wsl.localhost\Ubuntu\srv\kit\cerebro\cerebro.mjs"
+    monkeypatch.delenv("CEREBRO_ROOT", raising=False)
+    assert enchufe._wsl_cmd(unc) == ["wsl.exe", "-d", "Ubuntu", "--cd", "~", "-e", "node", "/srv/kit/cerebro/cerebro.mjs"]
+    monkeypatch.setenv("CEREBRO_ROOT", "/srv/MiCerebro")
+    assert enchufe._wsl_cmd(unc) == ["wsl.exe", "-d", "Ubuntu", "--cd", "~", "-e", "env", "CEREBRO_ROOT=/srv/MiCerebro",
+                                     "node", "/srv/kit/cerebro/cerebro.mjs"]
+    assert enchufe._wsl_cmd(r"C:\hermes\plugins\enchufe\cerebro.mjs") == []
 
 
-def test_ruta_okf_por_env_o_hermana(enchufe, monkeypatch, tmp_path):
-    monkeypatch.delenv("ENCHUFE_OKF_CMD", raising=False)
-    monkeypatch.delenv("ENCHUFE_OKF_MCP_CMD", raising=False)
-    monkeypatch.delenv("ENCHUFE_OKF_PATH", raising=False)
-    assert enchufe._okf_cmd() == ["node", str(OKF_DIR / "okf.mjs")]  # carpeta okf/ hermana del plugin
-    monkeypatch.setenv("ENCHUFE_OKF_PATH", str(tmp_path))  # carpeta
-    assert enchufe._okf_cmd() == ["node", str(tmp_path / "okf.mjs")]
-    assert enchufe._okf_mcp_cmd() == ["node", str(tmp_path / "okf-mcp.mjs")]
-    monkeypatch.setenv("ENCHUFE_OKF_PATH", str(tmp_path / "otro.mjs"))  # fichero
-    assert enchufe._okf_cmd() == ["node", str(tmp_path / "otro.mjs")]
+def test_ruta_cerebro_por_env_o_hermana(enchufe, monkeypatch, tmp_path):
+    monkeypatch.delenv("ENCHUFE_CEREBRO_CMD", raising=False)
+    monkeypatch.delenv("ENCHUFE_CEREBRO_MCP_CMD", raising=False)
+    monkeypatch.delenv("ENCHUFE_CEREBRO_PATH", raising=False)
+    assert enchufe._cerebro_cmd() == ["node", str(CEREBRO_DIR / "cerebro.mjs")]  # carpeta cerebro/ hermana del plugin
+    monkeypatch.setenv("ENCHUFE_CEREBRO_PATH", str(tmp_path))  # carpeta
+    assert enchufe._cerebro_cmd() == ["node", str(tmp_path / "cerebro.mjs")]
+    assert enchufe._cerebro_mcp_cmd() == ["node", str(tmp_path / "cerebro-mcp.mjs")]
+    monkeypatch.setenv("ENCHUFE_CEREBRO_PATH", str(tmp_path / "otro.mjs"))  # fichero
+    assert enchufe._cerebro_cmd() == ["node", str(tmp_path / "otro.mjs")]
 
 
 def test_tipos_configurables(enchufe, monkeypatch):
@@ -264,53 +264,53 @@ def test_tipos_configurables(enchufe, monkeypatch):
     assert enchufe._tipo_espejo("user") == "idea" and enchufe._tipo_espejo("memory") == "idea"
 
 
-# -- raíz deducida: el gateway arrancó sin OKF_ROOT -----------------------------
+# -- raíz deducida: el gateway arrancó sin CEREBRO_ROOT -----------------------------
 
 def _cerebro_con_enchufe(tmp_path):
-    """<tmp>/MiCerebro con okf.config.json y .okf/{hermes-enchufe,okf} copiados del repo."""
+    """<tmp>/MiCerebro con cerebro.config.json y .cerebro/{hermes-enchufe,cerebro} copiados del repo."""
     raiz = tmp_path / "MiCerebro"
-    (raiz / ".okf").mkdir(parents=True)
-    (raiz / "okf.config.json").write_text("{}", encoding="utf-8")
-    shutil.copytree(OKF_DIR, raiz / ".okf" / "okf")
-    shutil.copytree(OKF_DIR.parent / "hermes-enchufe", raiz / ".okf" / "hermes-enchufe",
+    (raiz / ".cerebro").mkdir(parents=True)
+    (raiz / "cerebro.config.json").write_text("{}", encoding="utf-8")
+    shutil.copytree(CEREBRO_DIR, raiz / ".cerebro" / "cerebro")
+    shutil.copytree(CEREBRO_DIR.parent / "hermes-enchufe", raiz / ".cerebro" / "hermes-enchufe",
                     ignore=shutil.ignore_patterns("tests", "__pycache__"))
     return raiz
 
 
 @pytest.mark.skipif(not shutil.which("node"), reason="sin node")
-def test_sin_okf_root_el_enchufe_deduce_la_raiz(enchufe, tmp_path, monkeypatch):
+def test_sin_cerebro_root_el_enchufe_deduce_la_raiz(enchufe, tmp_path, monkeypatch):
     raiz = _cerebro_con_enchufe(tmp_path)
     ajeno = tmp_path / "gateway-cwd"
     ajeno.mkdir()
     monkeypatch.chdir(ajeno)
-    for v in ("OKF_ROOT", "ENCHUFE_OKF_CMD", "ENCHUFE_OKF_MCP_CMD", "ENCHUFE_OKF_PATH"):
+    for v in ("CEREBRO_ROOT", "ENCHUFE_CEREBRO_CMD", "ENCHUFE_CEREBRO_MCP_CMD", "ENCHUFE_CEREBRO_PATH"):
         monkeypatch.delenv(v, raising=False)
-    monkeypatch.setattr(enchufe, "__file__", str(raiz / ".okf" / "hermes-enchufe" / "__init__.py"))
-    monkeypatch.setenv("ENCHUFE_OKF_PATH", str(raiz / ".okf" / "okf"))
-    texto = enchufe._run_okf_guardar("nota", "Apunte de prueba", "cuerpo del apunte")
+    monkeypatch.setattr(enchufe, "__file__", str(raiz / ".cerebro" / "hermes-enchufe" / "__init__.py"))
+    monkeypatch.setenv("ENCHUFE_CEREBRO_PATH", str(raiz / ".cerebro" / "cerebro"))
+    texto = enchufe._run_cerebro_guardar("nota", "Apunte de prueba", "cuerpo del apunte")
     notas = [n for n in (raiz / "memoria").glob("*.md") if n.name != "index.md"]
     assert len(notas) == 1
     assert str(notas[0]) in texto  # el mensaje dice dónde cayó
     assert list(ajeno.iterdir()) == []  # nada en el cwd ajeno
 
 
-def test_raiz_deducida_por_ruta_okf_si_el_plugin_esta_copiado(enchufe, tmp_path, monkeypatch):
+def test_raiz_deducida_por_ruta_cerebro_si_el_plugin_esta_copiado(enchufe, tmp_path, monkeypatch):
     raiz = _cerebro_con_enchufe(tmp_path)
     monkeypatch.setattr(enchufe, "__file__", str(tmp_path / "otro-sitio" / "enchufe" / "__init__.py"))
-    monkeypatch.setenv("ENCHUFE_OKF_PATH", str(raiz / ".okf" / "okf" / "okf.mjs"))
+    monkeypatch.setenv("ENCHUFE_CEREBRO_PATH", str(raiz / ".cerebro" / "cerebro" / "cerebro.mjs"))
     assert enchufe._raiz_deducida() == raiz
-    monkeypatch.setenv("ENCHUFE_OKF_PATH", str(tmp_path / "okf"))  # fuera de .okf/: no se inventa
+    monkeypatch.setenv("ENCHUFE_CEREBRO_PATH", str(tmp_path / "cerebro"))  # fuera de .cerebro/: no se inventa
     assert enchufe._raiz_deducida() is None
 
 
-def test_okf_root_explicito_manda_y_wsl_no_se_toca(enchufe, tmp_path, monkeypatch):
-    monkeypatch.setenv("OKF_ROOT", "/srv/MiCerebro")
-    assert enchufe._env_okf(["node", "x.mjs"])["OKF_ROOT"] == "/srv/MiCerebro"
-    monkeypatch.delenv("OKF_ROOT")
+def test_cerebro_root_explicito_manda_y_wsl_no_se_toca(enchufe, tmp_path, monkeypatch):
+    monkeypatch.setenv("CEREBRO_ROOT", "/srv/MiCerebro")
+    assert enchufe._env_cerebro(["node", "x.mjs"])["CEREBRO_ROOT"] == "/srv/MiCerebro"
+    monkeypatch.delenv("CEREBRO_ROOT")
     raiz = _cerebro_con_enchufe(tmp_path)
-    monkeypatch.setattr(enchufe, "__file__", str(raiz / ".okf" / "hermes-enchufe" / "__init__.py"))
-    assert "OKF_ROOT" not in enchufe._env_okf(["wsl.exe", "-e", "node"])
-    assert enchufe._env_okf(["node", "x.mjs"])["OKF_ROOT"] == str(raiz)
+    monkeypatch.setattr(enchufe, "__file__", str(raiz / ".cerebro" / "hermes-enchufe" / "__init__.py"))
+    assert "CEREBRO_ROOT" not in enchufe._env_cerebro(["wsl.exe", "-e", "node"])
+    assert enchufe._env_cerebro(["node", "x.mjs"])["CEREBRO_ROOT"] == str(raiz)
 
 
 @pytest.mark.skipif(not shutil.which("node"), reason="sin node")
@@ -318,14 +318,14 @@ def test_sin_cerebro_el_guardado_es_error_no_exito(enchufe, tmp_path, monkeypatc
     ajeno = tmp_path / "gateway-cwd"
     ajeno.mkdir()
     monkeypatch.chdir(ajeno)
-    for v in ("OKF_ROOT", "ENCHUFE_OKF_CMD", "ENCHUFE_OKF_MCP_CMD", "ENCHUFE_OKF_PATH"):
+    for v in ("CEREBRO_ROOT", "ENCHUFE_CEREBRO_CMD", "ENCHUFE_CEREBRO_MCP_CMD", "ENCHUFE_CEREBRO_PATH"):
         monkeypatch.delenv(v, raising=False)
-    # enchufe del repo (sin .okf/ a la vista): no hay raíz deducible, okf se niega
+    # enchufe del repo (sin .cerebro/ a la vista): no hay raíz deducible, MiCerebro se niega
     monkeypatch.setattr(enchufe, "__file__", str(tmp_path / "suelto" / "__init__.py"))
-    monkeypatch.setenv("ENCHUFE_OKF_PATH", str(OKF_DIR))
+    monkeypatch.setenv("ENCHUFE_CEREBRO_PATH", str(CEREBRO_DIR))
     with pytest.raises(RuntimeError, match="no encuentro tu cerebro"):
-        enchufe._run_okf_guardar("nota", "X", "y")
+        enchufe._run_cerebro_guardar("nota", "X", "y")
     assert list(ajeno.iterdir()) == []
     p = enchufe.EnchufeMemoryProvider()
-    out = json.loads(p.handle_tool_call("okf_guardar", {"tipo": "nota", "titulo": "X", "cuerpo": "y"}))
+    out = json.loads(p.handle_tool_call("cerebro_guardar", {"tipo": "nota", "titulo": "X", "cuerpo": "y"}))
     assert "error" in out and "resultado" not in out

@@ -1,5 +1,5 @@
 // Tests del revisor con el preset `micerebro`: mini-cerebro en un temporal (sin git: GIT_CEILING_DIRECTORIES).
-// Uso: node --test okf-revisor-micerebro.test.mjs
+// Uso: node --test cerebro-revisor-micerebro.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,7 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const aqui = path.dirname(fileURLToPath(import.meta.url));
-const revisor = path.join(aqui, 'okf-revisor.mjs');
+const revisor = path.join(aqui, 'cerebro-revisor.mjs');
 const hoy = new Date().toISOString().slice(0, 10);
 
 function escribir(root, rel, texto) {
@@ -27,8 +27,8 @@ function borrador(tipo, titulo, desc, cuerpo = 'Cuerpo con tildes: acción, niñ
 
 // Cerebro del kit: index/log de la raíz y el index con marcador «Vacío por ahora» de decisiones.
 function cerebro() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'okf-revisor-kit-'));
-  escribir(root, 'index.md', '---\nokf_version: 0.2\n---\n# MiCerebro\n');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cerebro-revisor-kit-'));
+  escribir(root, 'index.md', '---\ncerebro_version: 0.2\n---\n# MiCerebro\n');
   escribir(root, 'log.md', '# Log\n\n## 2026-11-07\n\n* **Cambio**: algo anterior.\n');
   escribir(root, 'memoria/decisiones/index.md', '# Decisiones\n\nUna nota por decisión.\n\n(Vacío por ahora. Aquí se listan las notas.)\n');
   escribir(root, 'memoria/borradores/dec.md', borrador('decision', 'Elegir cafetera exprés', 'Compramos una cafetera italiana: acción decidida'));
@@ -41,7 +41,7 @@ function cerebro() {
 
 function correr(root, ...args) {
   const r = spawnSync(process.execPath, [revisor, ...args], {
-    env: { ...process.env, OKF_ROOT: root, GIT_CEILING_DIRECTORIES: path.dirname(root) },
+    env: { ...process.env, CEREBRO_ROOT: root, GIT_CEILING_DIRECTORIES: path.dirname(root) },
     encoding: 'utf8',
   });
   return { code: r.status, out: r.stdout + r.stderr };
@@ -120,7 +120,7 @@ test('nunca pisa un fichero existente: sufijo -2, y la cabecera de hoy ya presen
 });
 
 test('sin index.md ni log.md se crean; un borrador sin ficha se queda', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'okf-revisor-kit-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cerebro-revisor-kit-'));
   escribir(root, 'memoria/borradores/a.md', borrador('decision', 'Mudanza', 'Nos mudamos'));
   escribir(root, 'memoria/borradores/sinficha.md', 'solo texto\n');
   const { code, out } = correr(root);

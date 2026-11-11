@@ -1,4 +1,4 @@
-// okf-comun — funciones compartidas por el revisor: parser de frontmatter,
+// cerebro-comun — funciones compartidas por el revisor: parser de frontmatter,
 // escritura atómica y sincronización git (commit + push opcionales).
 // Cero dependencias externas: solo módulos internos de Node.
 'use strict';
@@ -7,18 +7,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-// La raíz por defecto vive en okf-config (un solo cálculo para okf, el MCP y el revisor).
-export { defaultRoot } from './okf-config.mjs';
+// La raíz por defecto vive en cerebro-config (un solo cálculo para MiCerebro, el MCP y el revisor).
+export { defaultRoot } from './cerebro-config.mjs';
 
 export function atomicWrite(filePath, content) {
   const dir = path.dirname(filePath);
   fs.mkdirSync(dir, { recursive: true });
-  const tmp = path.join(dir, `.okf-revisor-tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const tmp = path.join(dir, `.cerebro-revisor-tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   fs.writeFileSync(tmp, content, 'utf8');
   fs.renameSync(tmp, filePath);
 }
 
-// YAML-lite deliberadamente pequeño: solo las claves planas que exige OKF.
+// YAML-lite deliberadamente pequeño: solo las claves planas que exige MiCerebro.
 export function parseFrontmatter(content) {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
   if (!match) return { data: {}, body: content, hasFrontmatter: false };

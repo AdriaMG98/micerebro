@@ -1,13 +1,13 @@
-// okf-promover — lógica compartida de promoción de notas del kit (preset micerebro):
+// cerebro-promover — lógica compartida de promoción de notas del kit (preset micerebro):
 // validar la ficha, decidir su carpeta, escribirla y anotar index.md y log.md.
-// La usan el revisor (borrador → nota) y el guardado directo (okf guardar, okf_guardar, okf-migrar).
+// La usan el revisor (borrador → nota) y el guardado directo (cerebro guardar, cerebro_guardar, cerebro-migrar).
 // Cero dependencias externas: solo módulos internos de Node.
 'use strict';
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fichaBorradorKit } from './okf-config.mjs';
-import { atomicWrite, parseFrontmatter } from './okf-comun.mjs';
+import { fichaBorradorKit } from './cerebro-config.mjs';
+import { atomicWrite, parseFrontmatter } from './cerebro-comun.mjs';
 
 export function parseIsoDate(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return null;
@@ -114,7 +114,7 @@ function anotarLog(logPath, hoy, entrada) {
 
 // Escribe la nota en su destino (ficha estable) y la anota en el index.md de su carpeta y en el log.
 // Es el camino común del revisor (promoverKit) y del guardado directo. No toca el borrador.
-// `destinoFijo` (opcional): ruta ya decidida por quien planificó (okf-migrar); si no, la elige destinoKit.
+// `destinoFijo` (opcional): ruta ya decidida por quien planificó (cerebro-migrar); si no, la elige destinoKit.
 export function escribirNotaKit(root, draft, cfg, hoy, destinoFijo = null) {
   const destino = destinoFijo || destinoKit(root, draft, cfg, hoy);
   if (destinoFijo && fs.existsSync(destino)) throw new Error(`el destino ya existe, no se pisa: ${destino}`);

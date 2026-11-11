@@ -1,6 +1,6 @@
 // Tests del guardado directo (guardar.modo "directo", el de por defecto en micerebro) y de que el
 // revisor sigue sirviendo a quien use el modo "borrador". Mini-cerebro en un temporal.
-// Uso: node --test okf-directo.test.mjs
+// Uso: node --test cerebro-directo.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -8,24 +8,24 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { cargarConfig } from './okf-config.mjs';
-import { guardarDirecto } from './okf-promover.mjs';
+import { cargarConfig } from './cerebro-config.mjs';
+import { guardarDirecto } from './cerebro-promover.mjs';
 
 const aqui = path.dirname(fileURLToPath(import.meta.url));
-const okf = path.join(aqui, 'okf.mjs');
-const mcp = path.join(aqui, 'okf-mcp.mjs');
-const revisor = path.join(aqui, 'okf-revisor.mjs');
+const cerebroCli = path.join(aqui, 'cerebro.mjs');
+const mcp = path.join(aqui, 'cerebro-mcp.mjs');
+const revisor = path.join(aqui, 'cerebro-revisor.mjs');
 const hoy = new Date().toISOString().slice(0, 10);
 
 function cerebro(config = '{}') {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'okf-directo-'));
-  fs.writeFileSync(path.join(root, 'okf.config.json'), config);
-  fs.writeFileSync(path.join(root, 'index.md'), '---\nokf_version: 0.2\n---\n# MiCerebro\n');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cerebro-directo-'));
+  fs.writeFileSync(path.join(root, 'cerebro.config.json'), config);
+  fs.writeFileSync(path.join(root, 'index.md'), '---\ncerebro_version: 0.2\n---\n# MiCerebro\n');
   return root;
 }
 
 function cli(root, args, input) {
-  const r = spawnSync(process.execPath, [okf, ...args, '--root', root], { encoding: 'utf8', input });
+  const r = spawnSync(process.execPath, [cerebroCli, ...args, '--root', root], { encoding: 'utf8', input });
   return { out: r.stdout, err: r.stderr, status: r.status };
 }
 
@@ -92,20 +92,20 @@ function llamarMcp(root, name, args) {
     { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '1' } } },
     { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: args } },
   ].map((m) => JSON.stringify(m)).join('\n') + '\n';
-  const r = spawnSync(process.execPath, [mcp], { env: { ...process.env, OKF_ROOT: root }, input: msgs, encoding: 'utf8' });
+  const r = spawnSync(process.execPath, [mcp], { env: { ...process.env, CEREBRO_ROOT: root }, input: msgs, encoding: 'utf8' });
   return r.stdout.split('\n').filter(Boolean).map((l) => JSON.parse(l)).find((x) => x.id === 2).result;
 }
 
-test('okf_guardar del MCP en modo directo: texto con la ruta absoluta, sin decir «borrador», y buscable', () => {
+test('cerebro_guardar del MCP en modo directo: texto con la ruta absoluta, sin decir «borrador», y buscable', () => {
   const root = cerebro();
-  const res = llamarMcp(root, 'okf_guardar', { tipo: 'decision', titulo: 'Usar pizarra', cuerpo: 'Decidimos usar una pizarra blanca.' });
+  const res = llamarMcp(root, 'cerebro_guardar', { tipo: 'decision', titulo: 'Usar pizarra', cuerpo: 'Decidimos usar una pizarra blanca.' });
   assert.ok(!res.isError, JSON.stringify(res));
   const f = path.join(root, 'memoria/decisiones', `${hoy}-usar-pizarra.md`);
   assert.ok(res.content[0].text.includes(f));
-  assert.match(res.content[0].text, /^OKF: guardado /);
+  assert.match(res.content[0].text, /^MiCerebro: guardado /);
   assert.doesNotMatch(res.content[0].text, /borrador/);
   assert.ok(fs.existsSync(f));
-  assert.match(llamarMcp(root, 'okf_buscar', { pregunta: 'pizarra blanca' }).content[0].text, /usar-pizarra/);
+  assert.match(llamarMcp(root, 'cerebro_buscar', { pregunta: 'pizarra blanca' }).content[0].text, /usar-pizarra/);
 });
 
 test('modo borrador: guardar deja borrador y el revisor lo promueve (mismo resultado que antes)', () => {
@@ -114,7 +114,7 @@ test('modo borrador: guardar deja borrador y el revisor lo promueve (mismo resul
   assert.equal(r.status, 0, r.err);
   assert.match(r.out, /borrador guardado memoria\/borradores\/elegir-cafetera\.md/);
   assert.deepEqual(listar(root).filter((f) => f.startsWith('memoria')), ['memoria/borradores/elegir-cafetera.md']);
-  const v = spawnSync(process.execPath, [revisor, '--no-commit'], { env: { ...process.env, OKF_ROOT: root, GIT_CEILING_DIRECTORIES: path.dirname(root) }, encoding: 'utf8' });
+  const v = spawnSync(process.execPath, [revisor, '--no-commit'], { env: { ...process.env, CEREBRO_ROOT: root, GIT_CEILING_DIRECTORIES: path.dirname(root) }, encoding: 'utf8' });
   assert.equal(v.status, 0, v.stderr);
   assert.match(v.stdout, /PROMOCIONADO: memoria\/borradores\/elegir-cafetera\.md → memoria\/decisiones\/.*elegir-cafetera\.md/);
   assert.deepEqual(listar(root).filter((f) => f.startsWith('memoria')), [`memoria/decisiones/${hoy}-elegir-cafetera.md`, 'memoria/decisiones/index.md']);

@@ -1,18 +1,18 @@
 #!/usr/bin/env node
-// okf-revisor — filtro determinista de borradores para la memoria curada OKF.
+// cerebro-revisor — filtro determinista de borradores para la memoria curada MiCerebro.
 // Cero dependencias externas: solo módulos internos de Node.
 //
-// Uso: node okf-revisor.mjs [--dry-run] [--no-commit] [--no-push] [--root <ruta>]
-// Raíz: --root > OKF_ROOT > okf.config.json hacia arriba desde el cwd > cwd.
+// Uso: node cerebro-revisor.mjs [--dry-run] [--no-commit] [--no-push] [--root <ruta>]
+// Raíz: --root > CEREBRO_ROOT > cerebro.config.json hacia arriba desde el cwd > cwd.
 'use strict';
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { cargarConfig } from './okf-config.mjs';
-import { validateKit, destinoKit, promoverKit } from './okf-promover.mjs';
-import { defaultRoot, readNotes, sincronizar } from './okf-comun.mjs';
+import { cargarConfig } from './cerebro-config.mjs';
+import { validateKit, destinoKit, promoverKit } from './cerebro-promover.mjs';
+import { defaultRoot, readNotes, sincronizar } from './cerebro-comun.mjs';
 
-// Rutas, tipos, borradores y carpetas de destino salen de okf-config (cargarConfig).
+// Rutas, tipos, borradores y carpetas de destino salen de cerebro-config (cargarConfig).
 
 function todayUtc() {
   const now = new Date();
@@ -38,12 +38,12 @@ const apagado = (v) => /^(0|false|no|off)$/i.test(String(v || '').trim());
 async function main() {
   const { flags: args, root: rootArg } = parseArgs(process.argv.slice(2));
   if (args.has('-h') || args.has('--help')) {
-    console.log('Uso: node okf-revisor.mjs [--dry-run] [--no-commit] [--no-push] [--root <ruta>]\n  OKF_REVISOR_COMMIT=0 equivale a --no-commit; OKF_REVISOR_PUSH=0 a --no-push.');
+    console.log('Uso: node cerebro-revisor.mjs [--dry-run] [--no-commit] [--no-push] [--root <ruta>]\n  CEREBRO_REVISOR_COMMIT=0 equivale a --no-commit; CEREBRO_REVISOR_PUSH=0 a --no-push.');
     return;
   }
   const dryRun = args.has('--dry-run');
-  const commit = !args.has('--no-commit') && !apagado(process.env.OKF_REVISOR_COMMIT);
-  const push = !args.has('--no-push') && !apagado(process.env.OKF_REVISOR_PUSH);
+  const commit = !args.has('--no-commit') && !apagado(process.env.CEREBRO_REVISOR_COMMIT);
+  const push = !args.has('--no-push') && !apagado(process.env.CEREBRO_REVISOR_PUSH);
   const root = path.resolve(rootArg || defaultRoot());
   const cfg = cargarConfig(root);
   const borradores = cfg.borradoresDir;
@@ -89,11 +89,11 @@ async function main() {
   else {
     // Solo lo que existe: `git add` rechaza una ruta sin coincidencias.
     const rutas = cfg.revisor.rutasSincronizadas.filter((r) => fs.existsSync(path.join(root, r)));
-    sincronizar(root, resumen, { rutas, firma: 'okf-revisor automático', commit, push });
+    sincronizar(root, resumen, { rutas, firma: 'cerebro-revisor automático', commit, push });
   }
 }
 
 main().catch((error) => {
-  console.error(`OKF revisor error: ${error.message}`);
+  console.error(`MiCerebro revisor error: ${error.message}`);
   process.exitCode = 1;
 });

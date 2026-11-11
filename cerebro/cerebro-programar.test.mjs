@@ -1,5 +1,5 @@
-// Tests de okf-programar con un sistema simulado: ni se escribe ni se ejecuta nada real.
-// Uso: node --test okf-programar.test.mjs
+// Tests de cerebro-programar con un sistema simulado: ni se escribe ni se ejecuta nada real.
+// Uso: node --test cerebro-programar.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,7 +7,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
-import { sistemaReal, programar, NOMBRE, ETIQUETA_MAC, MARCA } from './okf-programar.mjs';
+import { sistemaReal, programar, NOMBRE, ETIQUETA_MAC, MARCA } from './cerebro-programar.mjs';
 
 const aqui = path.dirname(fileURLToPath(import.meta.url));
 const plantillasDir = path.join(aqui, '..', 'systemd');
@@ -17,9 +17,9 @@ const plantillasDir = path.join(aqui, '..', 'systemd');
 // `fallosPor`: prefijo de comando → cuántas veces falla antes de ir bien.
 function simulado(plataforma, { existentes = [], fallan = [], salidas = {}, pre = {}, symlinks = [], fallosPor = {} } = {}) {
   const base = {
-    win32: { home: 'C:\\Users\\María José', node: 'C:\\Program Files\\nodejs\\node.exe', revisor: 'C:\\Kit Ñ\\okf\\okf-revisor.mjs' },
-    darwin: { home: '/Users/maría josé', node: '/opt/homebrew/bin/node', revisor: '/Users/maría josé/okf kit/okf/okf-revisor.mjs' },
-    linux: { home: '/home/maría josé', node: '/usr/bin/node', revisor: '/home/maría josé/okf kit/okf/okf-revisor.mjs' },
+    win32: { home: 'C:\\Users\\María José', node: 'C:\\Program Files\\nodejs\\node.exe', revisor: 'C:\\Kit Ñ\\cerebro\\cerebro-revisor.mjs' },
+    darwin: { home: '/Users/maría josé', node: '/opt/homebrew/bin/node', revisor: '/Users/maría josé/cerebro kit/cerebro/cerebro-revisor.mjs' },
+    linux: { home: '/home/maría josé', node: '/usr/bin/node', revisor: '/home/maría josé/cerebro kit/cerebro/cerebro-revisor.mjs' },
   }[plataforma];
   const ficheros = new Map();
   const comandos = [];
@@ -58,13 +58,13 @@ test('Linux: aplicar escribe las dos units con rutas absolutas y activa el timer
   const m = simulado('linux');
   programar({ accion: 'aplicar', root: RAIZ.linux, sistema: m.sis });
   const dir = '/home/maría josé/.config/systemd/user';
-  const svc = m.ficheros.get(`${dir}/okf-revisor.service`);
-  assert.ok(svc.includes('ExecStart="/usr/bin/node" "/home/maría josé/okf kit/okf/okf-revisor.mjs" --root "/home/maría josé/Mi Cerebro"'));
-  assert.ok(svc.includes('Environment="OKF_ROOT=/home/maría josé/Mi Cerebro"'));
+  const svc = m.ficheros.get(`${dir}/cerebro-revisor.service`);
+  assert.ok(svc.includes('ExecStart="/usr/bin/node" "/home/maría josé/cerebro kit/cerebro/cerebro-revisor.mjs" --root "/home/maría josé/Mi Cerebro"'));
+  assert.ok(svc.includes('Environment="CEREBRO_ROOT=/home/maría josé/Mi Cerebro"'));
   assert.ok(!svc.includes('%h'));
-  assert.equal(m.ficheros.get(`${dir}/okf-revisor.timer`), `# ${MARCA}\n${fs.readFileSync(path.join(plantillasDir, 'okf-revisor.timer'), 'utf8')}`);
+  assert.equal(m.ficheros.get(`${dir}/cerebro-revisor.timer`), `# ${MARCA}\n${fs.readFileSync(path.join(plantillasDir, 'cerebro-revisor.timer'), 'utf8')}`);
   assert.ok(svc.includes(MARCA));
-  assert.deepEqual(m.comandos, ['systemctl --user daemon-reload', 'systemctl --user enable --now okf-revisor.timer']);
+  assert.deepEqual(m.comandos, ['systemctl --user daemon-reload', 'systemctl --user enable --now cerebro-revisor.timer']);
 });
 
 test('Linux: % en la ruta se duplica para systemd', () => {
@@ -82,14 +82,14 @@ test('Linux: idempotente (dos aplicar dejan lo mismo) y quitar deshace', () => {
   assert.equal(m.ficheros.size, 2);
   programar({ accion: 'quitar', root: RAIZ.linux, sistema: m.sis });
   assert.equal(m.ficheros.size, 0);
-  assert.ok(m.comandos.includes('systemctl --user disable --now okf-revisor.timer'));
+  assert.ok(m.comandos.includes('systemctl --user disable --now cerebro-revisor.timer'));
 });
 
 test('Linux: estado distingue no programado y programado', () => {
   const a = simulado('linux');
   programar({ accion: 'estado', root: RAIZ.linux, sistema: a.sis });
   assert.match(a.salida[0], /^No programado/);
-  const timer = '/home/maría josé/.config/systemd/user/okf-revisor.timer';
+  const timer = '/home/maría josé/.config/systemd/user/cerebro-revisor.timer';
   const b = simulado('linux', { pre: { [timer]: `# ${MARCA}\n` }, salidas: { 'systemctl --user is-active': 'active\n', 'systemctl --user list-timers': 'NEXT LEFT\nfoo 10min\n' } });
   programar({ accion: 'estado', root: RAIZ.linux, sistema: b.sis });
   assert.match(b.salida[0], /^Programado/);
@@ -110,7 +110,7 @@ test('Mac: aplicar escribe el plist (node absoluto, intervalo, log) y hace boots
   assert.ok(t.includes('<string>/Users/maría josé/Mi Cerebro</string>'));
   assert.ok(t.includes('<key>StartInterval</key><integer>3600</integer>'));
   assert.ok(t.includes('<key>RunAtLoad</key><true/>'));
-  assert.ok(t.includes('/Users/maría josé/Library/Logs/okf-revisor.log'));
+  assert.ok(t.includes('/Users/maría josé/Library/Logs/cerebro-revisor.log'));
   assert.deepEqual(m.comandos, [`launchctl bootout gui/501/${ETIQUETA_MAC}`, `launchctl bootstrap gui/501 ${plist}`]);
 });
 
@@ -118,7 +118,7 @@ test('Mac: el log va a registro/ del cerebro si la carpeta existe; & se escapa',
   const m = simulado('darwin', { existentes: ['/Users/a/Cerebro & Co/registro'] });
   programar({ accion: 'aplicar', root: '/Users/a/Cerebro & Co', sistema: m.sis });
   const t = [...m.ficheros.values()][0];
-  assert.ok(t.includes('/Users/a/Cerebro &amp; Co/registro/okf-revisor.log'));
+  assert.ok(t.includes('/Users/a/Cerebro &amp; Co/registro/cerebro-revisor.log'));
 });
 
 test('Mac: idempotente, quitar y estado', () => {
@@ -142,11 +142,11 @@ test('Mac: idempotente, quitar y estado', () => {
 test('Windows: aplicar crea el .vbs mudo (UTF-16LE, con node y revisor dentro) y la tarea horaria', () => {
   const m = simulado('win32');
   programar({ accion: 'aplicar', root: RAIZ.win32, sistema: m.sis });
-  const vbs = 'C:\\Users\\María José\\AppData\\Local\\okf-revisor\\okf-revisor.vbs';
+  const vbs = 'C:\\Users\\María José\\AppData\\Local\\cerebro-revisor\\cerebro-revisor.vbs';
   const t = m.ficheros.get(vbs);
   assert.deepEqual(m.ficheros.opciones, { utf16le: true });
   assert.ok(t.includes(MARCA));
-  assert.ok(t.includes('"C:\\Program Files\\nodejs\\node.exe"') && t.includes('"C:\\Kit Ñ\\okf\\okf-revisor.mjs"'));
+  assert.ok(t.includes('"C:\\Program Files\\nodejs\\node.exe"') && t.includes('"C:\\Kit Ñ\\cerebro\\cerebro-revisor.mjs"'));
   assert.ok(t.includes('sh.Run(cmd, 0, True)'));
   const c = m.comandos.filter((x) => x.startsWith('schtasks /Create'));
   assert.equal(c.length, 1);
@@ -160,7 +160,7 @@ test('Windows: ruta demasiado larga para /TR da error claro', () => {
 
 test('Windows: idempotente (/F), quitar, estado', () => {
   const m = simulado('win32');
-  const vbs = 'C:\\Users\\María José\\AppData\\Local\\okf-revisor\\okf-revisor.vbs';
+  const vbs = 'C:\\Users\\María José\\AppData\\Local\\cerebro-revisor\\cerebro-revisor.vbs';
   m.sis.ejecutar = ((orig) => (cmd, args) => { const r = orig(cmd, args); return cmd === 'schtasks' && args[0] === '/Query' ? { ...r, stdout: m.ficheros.has(vbs) ? `<Command>wscript.exe</Command><Arguments>//B "${vbs}" "x"</Arguments>` : '', status: m.ficheros.has(vbs) ? 0 : 1 } : r; })(m.sis.ejecutar);
   programar({ accion: 'aplicar', root: RAIZ.win32, sistema: m.sis });
   programar({ accion: 'aplicar', root: RAIZ.win32, sistema: m.sis });
@@ -169,12 +169,12 @@ test('Windows: idempotente (/F), quitar, estado', () => {
   assert.equal(m.ficheros.size, 1);
   programar({ accion: 'quitar', root: RAIZ.win32, sistema: m.sis });
   assert.equal(m.ficheros.size, 0);
-  assert.deepEqual(m.dirsBorrados, ['C:\\Users\\María José\\AppData\\Local\\okf-revisor']);
+  assert.deepEqual(m.dirsBorrados, ['C:\\Users\\María José\\AppData\\Local\\cerebro-revisor']);
   assert.ok(m.comandos.includes(`schtasks /Delete /TN ${NOMBRE} /F`));
   const n = simulado('win32', { fallan: ['schtasks /Query'] });
   programar({ accion: 'estado', root: RAIZ.win32, sistema: n.sis });
   assert.match(n.salida[0], /^No programado/);
-  const s = simulado('win32', { salidas: { 'schtasks /Query': 'C:\\Users\\María José\\AppData\\Local\\okf-revisor\\okf-revisor.vbs\nTaskName: \\okf-revisor\nLast Run Time: 08/11/2026 10:00:00\nOther: x\n' } });
+  const s = simulado('win32', { salidas: { 'schtasks /Query': 'C:\\Users\\María José\\AppData\\Local\\cerebro-revisor\\cerebro-revisor.vbs\nTaskName: \\cerebro-revisor\nLast Run Time: 08/11/2026 10:00:00\nOther: x\n' } });
   programar({ accion: 'estado', root: RAIZ.win32, sistema: s.sis });
   assert.match(s.salida[0], /^Programado/);
   assert.ok(s.salida.some((l) => l.includes('Last Run Time')));
@@ -208,8 +208,8 @@ test('plataforma desconocida: error', () => {
 });
 
 test('CLI real con --dry-run --aplicar no escribe en el home', () => {
-  const home = fs.mkdtempSync(path.join(fs.realpathSync(process.env.TMPDIR || '/tmp'), 'okf-prog-'));
-  const r = spawnSync(process.execPath, [path.join(aqui, 'okf-programar.mjs'), '--dry-run', '--aplicar', '--root', home], { encoding: 'utf8', env: { ...process.env, HOME: home, USERPROFILE: home } });
+  const home = fs.mkdtempSync(path.join(fs.realpathSync(process.env.TMPDIR || '/tmp'), 'cerebro-prog-'));
+  const r = spawnSync(process.execPath, [path.join(aqui, 'cerebro-programar.mjs'), '--dry-run', '--aplicar', '--root', home], { encoding: 'utf8', env: { ...process.env, HOME: home, USERPROFILE: home } });
   assert.equal(r.status, 0, r.stderr);
   assert.ok(r.stdout.includes('--- escribiría') || r.stdout.includes('$ '));
   assert.deepEqual(fs.readdirSync(home), []);
@@ -220,7 +220,7 @@ test('D2: $ en la ruta se duplica en ExecStart pero no en Environment', () => {
   programar({ accion: 'aplicar', root: '/home/x/$HOME/c', sistema: m.sis });
   const svc = [...m.ficheros.values()][0];
   assert.ok(svc.includes('--root "/home/x/$$HOME/c"'));
-  assert.ok(svc.includes('Environment="OKF_ROOT=/home/x/$HOME/c"'));
+  assert.ok(svc.includes('Environment="CEREBRO_ROOT=/home/x/$HOME/c"'));
 });
 
 test('Mac: bootstrap se reintenta con espera si falla tras el bootout', () => {
@@ -244,7 +244,7 @@ test('--dry-run: los mensajes finales dicen (simulado)', () => {
 // --- Colisiones: nada ajeno se pisa ni se borra sin --forzar ---------------------------
 const DIR_L = '/home/maría josé/.config/systemd/user';
 const AJENOS = {
-  linux: { ruta: `${DIR_L}/okf-revisor.service`, rutaTimer: `${DIR_L}/okf-revisor.timer` },
+  linux: { ruta: `${DIR_L}/cerebro-revisor.service`, rutaTimer: `${DIR_L}/cerebro-revisor.timer` },
   darwin: { ruta: `/Users/maría josé/Library/LaunchAgents/${ETIQUETA_MAC}.plist` },
 };
 
@@ -308,7 +308,7 @@ test('Windows: tarea ajena aborta (no es la de nuestro .vbs), --quitar no la bor
 });
 
 test('Windows: .vbs ajeno sin marca aborta', () => {
-  const vbs = 'C:\\Users\\María José\\AppData\\Local\\okf-revisor\\okf-revisor.vbs';
+  const vbs = 'C:\\Users\\María José\\AppData\\Local\\cerebro-revisor\\cerebro-revisor.vbs';
   const m = simulado('win32', { fallan: ['schtasks /Query'], pre: { [vbs]: 'MsgBox 1' } });
   assert.throws(() => programar({ accion: 'aplicar', root: RAIZ.win32, sistema: m.sis }), /no lleva la marca/);
   assert.ok(!m.comandos.some((c) => c.startsWith('schtasks /Create')));
@@ -317,14 +317,14 @@ test('Windows: .vbs ajeno sin marca aborta', () => {
 // escribir/leer/borrar REALES (con BOM UTF-16 de verdad) sobre un directorio temporal: las rutas
 // win32 se proyectan dentro de él para no crear ficheros con `\` en el cwd de Linux.
 test('Windows: escribir/leer reales — aplicar, aplicar, quitar sin abortar (el .vbs UTF-16 se reconoce)', () => {
-  const tmp = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'okf-win-'));
+  const tmp = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'cerebro-win-'));
   const real = sistemaReal();
   const m = (r) => path.join(tmp, r.replace(/\\/g, '/').replace(':', ''));
-  const vbsWin = 'C:\\Users\\María & José\\AppData\\Local\\okf-revisor\\okf-revisor.vbs';
+  const vbsWin = 'C:\\Users\\María & José\\AppData\\Local\\cerebro-revisor\\cerebro-revisor.vbs';
   const comandos = [];
   let tarea = false;
   const sis = {
-    ...real, plataforma: 'win32', home: 'C:\\Users\\María & José', node: 'C:\\Program Files\\nodejs\\node.exe', revisor: 'C:\\Kit Ñ\\okf\\okf-revisor.mjs',
+    ...real, plataforma: 'win32', home: 'C:\\Users\\María & José', node: 'C:\\Program Files\\nodejs\\node.exe', revisor: 'C:\\Kit Ñ\\cerebro\\cerebro-revisor.mjs',
     escribir: (r, t, o) => real.escribir(m(r), t, o), leer: (r) => real.leer(m(r)), borrar: (r) => real.borrar(m(r)),
     borrarDir: (r) => real.borrarDir(m(r)), existe: (r) => real.existe(m(r)), esSymlink: (r) => real.esSymlink(m(r)),
     simulado: false, imprimir: () => {},
@@ -356,7 +356,7 @@ test('Windows: escribir/leer reales — aplicar, aplicar, quitar sin abortar (el
 });
 
 test('leer real: UTF-8 con BOM y UTF-16LE', () => {
-  const tmp = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'okf-bom-'));
+  const tmp = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'cerebro-bom-'));
   const real = sistemaReal();
   try {
     fs.writeFileSync(path.join(tmp, 'a'), Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('ñ x')]));

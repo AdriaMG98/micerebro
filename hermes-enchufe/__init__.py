@@ -1,21 +1,21 @@
-"""Enchufe — plugin MemoryProvider de Hermes que conecta su memoria con okf (MiCerebro).
+"""Enchufe — plugin MemoryProvider de Hermes que conecta su memoria con MiCerebro.
 
 Config SOLO por entorno (sin save_config nativo):
-  OKF_ROOT               raíz del cerebro (carpeta con memoria/, planes/…); la lee okf directamente.
-                         Sin ella, el enchufe la deduce de dónde está instalado (`<raíz>/.okf/hermes-enchufe`,
-                         o `ENCHUFE_OKF_PATH` dentro de `<raíz>/.okf/`, con `<raíz>/okf.config.json`) y se la
-                         pasa a okf. Si tampoco así, okf busca okf.config.json hacia arriba desde el cwd y,
+  CEREBRO_ROOT               raíz del cerebro (carpeta con memoria/, planes/…); la lee MiCerebro directamente.
+                         Sin ella, el enchufe la deduce de dónde está instalado (`<raíz>/.cerebro/hermes-enchufe`,
+                         o `ENCHUFE_CEREBRO_PATH` dentro de `<raíz>/.cerebro/`, con `<raíz>/cerebro.config.json`) y se la
+                         pasa a cerebro. Si tampoco así, MiCerebro busca cerebro.config.json hacia arriba desde el cwd y,
                          si no lo halla, se niega a guardar (no escribe nada).
-  ENCHUFE_OKF_CMD        comando completo para invocar okf.mjs (gana a todo lo demás), p. ej.
-                         `node /ruta/a/okf/okf.mjs` o `wsl.exe -e node /ruta/en/wsl/okf/okf.mjs`
-  ENCHUFE_OKF_PATH       ruta a okf.mjs (o a la carpeta okf/ que lo contiene)
-                         Si no hay ninguna de las dos: `okf/okf.mjs` junto a la carpeta de este plugin.
-  ENCHUFE_OKF_MCP_CMD    comando de okf-mcp.mjs, para guardar notas (def.: el de okf.mjs con okf-mcp.mjs)
+  ENCHUFE_CEREBRO_CMD        comando completo para invocar cerebro.mjs (gana a todo lo demás), p. ej.
+                         `node /ruta/a/cerebro/cerebro.mjs` o `wsl.exe -e node /ruta/en/wsl/cerebro/cerebro.mjs`
+  ENCHUFE_CEREBRO_PATH       ruta a cerebro.mjs (o a la carpeta cerebro/ que lo contiene)
+                         Si no hay ninguna de las dos: `cerebro/cerebro.mjs` junto a la carpeta de este plugin.
+  ENCHUFE_CEREBRO_MCP_CMD    comando de cerebro-mcp.mjs, para guardar notas (def.: el de cerebro.mjs con cerebro-mcp.mjs)
   ENCHUFE_TIPOS          tipos de nota admitidos, separados por comas (def.: los de MiCerebro)
   ENCHUFE_PERFIL         nombre del perfil (def.: deducido del HERMES_HOME)
   ENCHUFE_GBRAIN_URL / ENCHUFE_GBRAIN_TOKEN   opcionales: activan la tool gbrain_query (integración
                          genérica con un servidor MCP HTTP de búsqueda semántica)
-Lo guardado entra vía okf-mcp: con guardar.modo «directo» (el del kit) queda ya promovido y buscable;
+Lo guardado entra vía cerebro-mcp: con guardar.modo «directo» (el del kit) queda ya promovido y buscable;
 con «borrador» va a memoria/borradores/ y lo promueve el revisor.
 Nunca lanza excepciones hacia Hermes.
 """
@@ -55,14 +55,14 @@ _GUARDAR_TIMEOUT = 20.0
 _SHUTDOWN_TIMEOUT = 10.0
 _MAX_PREFETCH_CHARS = 6000
 _TIPOS_DEFECTO = ("nota", "decision", "aprendizaje", "proyecto", "area", "recurso", "persona")
-_AVISO = "⚠ Memoria okf no disponible: sigo solo con la libreta"
+_AVISO = "⚠ Memoria MiCerebro no disponible: sigo solo con la libreta"
 _STOP = object()
 
 _BLOQUE = (
-    "Memoria de largo plazo: vive en okf (MiCerebro), compartida con el resto de tus agentes. "
-    "Antes de preguntarle algo al usuario sobre él o sus proyectos, busca con okf_buscar. "
-    "Lo que aprendas y valga la pena conservar, guárdalo con okf_guardar: queda guardado y "
-    "buscable al instante. La libreta integrada se espeja sola a okf."
+    "Memoria de largo plazo: vive en MiCerebro, compartida con el resto de tus agentes. "
+    "Antes de preguntarle algo al usuario sobre él o sus proyectos, busca con cerebro_buscar. "
+    "Lo que aprendas y valga la pena conservar, guárdalo con cerebro_guardar: queda guardado y "
+    "buscable al instante. La libreta integrada se espeja sola a cerebro."
 )
 
 
@@ -71,33 +71,33 @@ _SIN_VENTANA = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
 def _wsl_cmd(ruta_unc: str) -> list[str]:
-    """Windows con el plugin en \\\\wsl.localhost\\<distro>\\...: okf corre dentro del WSL.
-    Devuelve [] si la ruta no es del WSL. Si hay OKF_ROOT (una ruta de Linux, la del WSL) se le pasa."""
+    """Windows con el plugin en \\\\wsl.localhost\\<distro>\\...: MiCerebro corre dentro del WSL.
+    Devuelve [] si la ruta no es del WSL. Si hay CEREBRO_ROOT (una ruta de Linux, la del WSL) se le pasa."""
     m = re.match(r"^\\\\wsl(?:\.localhost|\$)\\([^\\]+)(\\.*)$", ruta_unc, re.I)
     if not m:
         return []
     distro, linux = m.group(1), m.group(2).replace("\\", "/")
-    raiz = os.environ.get("OKF_ROOT", "").strip()
-    entorno = ["env", f"OKF_ROOT={raiz}"] if raiz else []
+    raiz = os.environ.get("CEREBRO_ROOT", "").strip()
+    entorno = ["env", f"CEREBRO_ROOT={raiz}"] if raiz else []
     return ["wsl.exe", "-d", distro, "--cd", "~", "-e", *entorno, "node", linux]
 
 
-def _raiz_de(carpeta_okf: Path) -> Path | None:
-    """`<X>/.okf/<algo>` -> X si existe `<X>/okf.config.json`."""
-    if carpeta_okf.parent.name != ".okf":
+def _raiz_de(carpeta_cerebro: Path) -> Path | None:
+    """`<X>/.cerebro/<algo>` -> X si existe `<X>/cerebro.config.json`."""
+    if carpeta_cerebro.parent.name != ".cerebro":
         return None
-    raiz = carpeta_okf.parent.parent
-    return raiz if (raiz / "okf.config.json").is_file() else None
+    raiz = carpeta_cerebro.parent.parent
+    return raiz if (raiz / "cerebro.config.json").is_file() else None
 
 
 def _raiz_deducida() -> Path | None:
-    """Raíz del cerebro cuando no hay OKF_ROOT: la del sitio donde está instalado el enchufe
-    (symlink resuelto) o, si el instalador lo copió, la de ENCHUFE_OKF_PATH. None si no se puede deducir."""
+    """Raíz del cerebro cuando no hay CEREBRO_ROOT: la del sitio donde está instalado el enchufe
+    (symlink resuelto) o, si el instalador lo copió, la de ENCHUFE_CEREBRO_PATH. None si no se puede deducir."""
     try:
         r = _raiz_de(Path(os.path.realpath(__file__)).parent)
         if r:
             return r
-        raw = os.environ.get("ENCHUFE_OKF_PATH", "").strip()
+        raw = os.environ.get("ENCHUFE_CEREBRO_PATH", "").strip()
         if raw:
             ruta = Path(os.path.realpath(Path(raw).expanduser()))
             carpeta = ruta.parent if ruta.suffix == ".mjs" else ruta
@@ -107,28 +107,28 @@ def _raiz_deducida() -> Path | None:
     return None
 
 
-def _env_okf(cmd: list[str]) -> dict[str, str]:
-    """Entorno para el subprocess de okf: con OKF_ROOT explícito si hay o se deduce
+def _env_cerebro(cmd: list[str]) -> dict[str, str]:
+    """Entorno para el subprocess de MiCerebro: con CEREBRO_ROOT explícito si hay o se deduce
     (el gateway puede haber arrancado antes de que el .env la trajera). La rama WSL ya la pasa con `env`."""
     env = dict(os.environ)
-    if not env.get("OKF_ROOT", "").strip() and not (cmd and Path(cmd[0]).name.lower().startswith("wsl")):
+    if not env.get("CEREBRO_ROOT", "").strip() and not (cmd and Path(cmd[0]).name.lower().startswith("wsl")):
         raiz = _raiz_deducida()
         if raiz:
-            env["OKF_ROOT"] = str(raiz)
+            env["CEREBRO_ROOT"] = str(raiz)
     return env
 
 
-def _ruta_okf_js() -> Path:
-    """okf.mjs: ENCHUFE_OKF_PATH (fichero o carpeta okf/) o la carpeta `okf/` hermana de este plugin."""
-    raw = os.environ.get("ENCHUFE_OKF_PATH", "").strip()
+def _ruta_cerebro_js() -> Path:
+    """cerebro.mjs: ENCHUFE_CEREBRO_PATH (fichero o carpeta cerebro/) o la carpeta `cerebro/` hermana de este plugin."""
+    raw = os.environ.get("ENCHUFE_CEREBRO_PATH", "").strip()
     if raw:
         ruta = Path(raw).expanduser()
-        return ruta / "okf.mjs" if ruta.is_dir() else ruta
-    return Path(__file__).resolve().parents[1] / "okf" / "okf.mjs"
+        return ruta / "cerebro.mjs" if ruta.is_dir() else ruta
+    return Path(__file__).resolve().parents[1] / "cerebro" / "cerebro.mjs"
 
 
-def _default_okf_cmd() -> list[str]:
-    ruta = _ruta_okf_js()
+def _default_cerebro_cmd() -> list[str]:
+    ruta = _ruta_cerebro_js()
     if os.name == "nt":
         return _wsl_cmd(str(ruta)) or ["node", str(ruta)]
     return ["node", str(ruta)]
@@ -151,52 +151,52 @@ def _split(cmd: str) -> list[str]:
     return shlex.split(cmd, posix=True)
 
 
-def _okf_cmd() -> list[str]:
-    raw = os.environ.get("ENCHUFE_OKF_CMD", "").strip()
-    return _split(raw) if raw else _default_okf_cmd()
+def _cerebro_cmd() -> list[str]:
+    raw = os.environ.get("ENCHUFE_CEREBRO_CMD", "").strip()
+    return _split(raw) if raw else _default_cerebro_cmd()
 
 
-def _okf_mcp_cmd() -> list[str]:
-    raw = os.environ.get("ENCHUFE_OKF_MCP_CMD", "").strip()
+def _cerebro_mcp_cmd() -> list[str]:
+    raw = os.environ.get("ENCHUFE_CEREBRO_MCP_CMD", "").strip()
     if raw:
         return _split(raw)
-    cmd = _okf_cmd()
-    if cmd and cmd[-1].endswith("okf.mjs"):
-        return cmd[:-1] + [cmd[-1][: -len("okf.mjs")] + "okf-mcp.mjs"]
+    cmd = _cerebro_cmd()
+    if cmd and cmd[-1].endswith("cerebro.mjs"):
+        return cmd[:-1] + [cmd[-1][: -len("cerebro.mjs")] + "cerebro-mcp.mjs"]
     return []
 
 
-def _run_okf_buscar(pregunta: str, timeout: float = _BUSCAR_TIMEOUT) -> str:
-    """`okf buscar`; lanza RuntimeError si okf no responde."""
+def _run_cerebro_buscar(pregunta: str, timeout: float = _BUSCAR_TIMEOUT) -> str:
+    """`cerebro buscar`; lanza RuntimeError si MiCerebro no responde."""
     try:
-        cmd = _okf_cmd()
-        r = subprocess.run(cmd + ["buscar", pregunta], capture_output=True, text=True, env=_env_okf(cmd),
+        cmd = _cerebro_cmd()
+        r = subprocess.run(cmd + ["buscar", pregunta], capture_output=True, text=True, env=_env_cerebro(cmd),
                            encoding="utf-8", timeout=timeout, creationflags=_SIN_VENTANA)
     except (OSError, subprocess.SubprocessError) as e:
-        raise RuntimeError(f"okf no responde: {e}") from e
+        raise RuntimeError(f"MiCerebro no responde: {e}") from e
     if r.returncode != 0:
-        raise RuntimeError((r.stderr or r.stdout or "okf terminó con error").strip()[:300])
+        raise RuntimeError((r.stderr or r.stdout or "MiCerebro terminó con error").strip()[:300])
     return r.stdout.strip()
 
 
-def _run_okf_guardar(tipo: str, titulo: str, cuerpo: str, timeout: float = _GUARDAR_TIMEOUT) -> str:
-    """okf_guardar vía okf-mcp (stdio, una sola vuelta). RuntimeError si falla."""
-    cmd = _okf_mcp_cmd()
+def _run_cerebro_guardar(tipo: str, titulo: str, cuerpo: str, timeout: float = _GUARDAR_TIMEOUT) -> str:
+    """cerebro_guardar vía cerebro-mcp (stdio, una sola vuelta). RuntimeError si falla."""
+    cmd = _cerebro_mcp_cmd()
     if not cmd:
-        raise RuntimeError("sin comando okf-mcp (define ENCHUFE_OKF_MCP_CMD)")
+        raise RuntimeError("sin comando cerebro-mcp (define ENCHUFE_CEREBRO_MCP_CMD)")
     msgs = [
         {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
             "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "enchufe", "version": "1.0.0"}}},
         {"jsonrpc": "2.0", "method": "notifications/initialized"},
         {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {
-            "name": "okf_guardar", "arguments": {"tipo": tipo, "titulo": titulo, "cuerpo": cuerpo}}},
+            "name": "cerebro_guardar", "arguments": {"tipo": tipo, "titulo": titulo, "cuerpo": cuerpo}}},
     ]
     try:
         r = subprocess.run(cmd, input="\n".join(json.dumps(m) for m in msgs) + "\n", capture_output=True,
                            text=True, encoding="utf-8", timeout=timeout, creationflags=_SIN_VENTANA,
-                           env=_env_okf(cmd))
+                           env=_env_cerebro(cmd))
     except (OSError, subprocess.SubprocessError) as e:
-        raise RuntimeError(f"okf-mcp no responde: {e}") from e
+        raise RuntimeError(f"cerebro-mcp no responde: {e}") from e
     for line in r.stdout.splitlines():
         try:
             resp = json.loads(line)
@@ -208,10 +208,10 @@ def _run_okf_guardar(tipo: str, titulo: str, cuerpo: str, timeout: float = _GUAR
         texto = " ".join(c.get("text", "") for c in res.get("content", []))
         if res.get("isError") or "error" in resp:
             raise RuntimeError(texto or str(resp.get("error")))
-        if "guardado" not in texto:  # sin confirmación de okf no se dice «guardado»
-            raise RuntimeError(f"okf no confirmó el guardado: {texto[:200]}")
+        if "guardado" not in texto:  # sin confirmación de MiCerebro no se dice «guardado»
+            raise RuntimeError(f"MiCerebro no confirmó el guardado: {texto[:200]}")
         return texto
-    raise RuntimeError((r.stderr or "okf-mcp sin respuesta").strip()[:300])
+    raise RuntimeError((r.stderr or "cerebro-mcp sin respuesta").strip()[:300])
 
 
 def _gbrain_call(url: str, token: str, tool: str, args: dict, timeout: float = 20.0) -> str:
@@ -253,12 +253,12 @@ def _gbrain_call(url: str, token: str, tool: str, args: dict, timeout: float = 2
 def _titulo(content: str, perfil: str = "") -> str:
     palabras = " ".join(content.split()).split(" ")[:8]
     base = " ".join(palabras).strip(" .,:;-—") or "apunte de Hermes"
-    # sufijo corto (perfil+contenido): okf-mcp sobrescribe si el slug ya existe
+    # sufijo corto (perfil+contenido): cerebro-mcp sobrescribe si el slug ya existe
     return f"{base} {hashlib.sha1(f'{perfil}\0{content}'.encode('utf-8')).hexdigest()[:6]}"
 
 
 class EnchufeMemoryProvider(MemoryProvider):
-    """Memoria de Hermes ↔ okf. Una instancia por perfil (contrato de multiplexado)."""
+    """Memoria de Hermes ↔ cerebro. Una instancia por perfil (contrato de multiplexado)."""
 
     def __init__(self):
         self._session_id = ""
@@ -281,8 +281,8 @@ class EnchufeMemoryProvider(MemoryProvider):
 
     def is_available(self) -> bool:
         try:
-            cmd = _okf_cmd()
-            if not cmd or not (len(cmd) > 1 or os.environ.get("ENCHUFE_OKF_CMD")):
+            cmd = _cerebro_cmd()
+            if not cmd or not (len(cmd) > 1 or os.environ.get("ENCHUFE_CEREBRO_CMD")):
                 return False
             # `node <ruta>` local: el .mjs debe existir (con wsl.exe no se puede comprobar)
             if Path(cmd[0]).name in ("node", "node.exe") and len(cmd) > 1 and cmd[-1].endswith(".mjs"):
@@ -292,7 +292,7 @@ class EnchufeMemoryProvider(MemoryProvider):
             return False
 
     def unavailable_reason(self) -> str:
-        return "Enchufe: define ENCHUFE_OKF_CMD (comando para invocar okf.mjs)."
+        return "Enchufe: define ENCHUFE_CEREBRO_CMD (comando para invocar cerebro.mjs)."
 
     def initialize(self, session_id: str, **kwargs) -> None:
         try:
@@ -333,7 +333,7 @@ class EnchufeMemoryProvider(MemoryProvider):
 
             def trabajo():
                 try:
-                    resultado["texto"] = _run_okf_buscar(query, _BUSCAR_TIMEOUT)
+                    resultado["texto"] = _run_cerebro_buscar(query, _BUSCAR_TIMEOUT)
                 except Exception as e:  # noqa: BLE001
                     resultado["error"] = str(e)
 
@@ -343,14 +343,14 @@ class EnchufeMemoryProvider(MemoryProvider):
             if "texto" in resultado:
                 if not resultado["texto"]:
                     return ""
-                self._status = self._mk_status("Memoria okf", 0)
-                return f"## Memoria okf\n{resultado['texto'][:_MAX_PREFETCH_CHARS]}"
-            logger.warning("enchufe: okf no disponible en prefetch: %s", resultado.get("error", "timeout"))
+                self._status = self._mk_status("Memoria MiCerebro", 0)
+                return f"## Memoria MiCerebro\n{resultado['texto'][:_MAX_PREFETCH_CHARS]}"
+            logger.warning("enchufe: MiCerebro no disponible en prefetch: %s", resultado.get("error", "timeout"))
             with self._lock:
                 if sid in self._avisadas:
                     return ""
                 self._avisadas.add(sid)
-            self._status = self._mk_status("Memoria okf no disponible", 0, "⚠")
+            self._status = self._mk_status("Memoria MiCerebro no disponible", 0, "⚠")
             return _AVISO
         except Exception:
             logger.exception("enchufe: fallo en prefetch")
@@ -394,12 +394,12 @@ class EnchufeMemoryProvider(MemoryProvider):
 
     def _tool_schemas(self) -> list[dict[str, Any]]:
         schemas = [
-            {"name": "okf_buscar",
-             "description": "Busca en la memoria curada (okf, MiCerebro). Úsala antes de preguntarle al usuario.",
+            {"name": "cerebro_buscar",
+             "description": "Busca en la memoria curada (MiCerebro). Úsala antes de preguntarle al usuario.",
              "parameters": {"type": "object", "properties": {"pregunta": {"type": "string"}},
                             "required": ["pregunta"], "additionalProperties": False}},
-            {"name": "okf_guardar",
-             "description": "Guarda lo aprendido en okf (queda promovido y buscable al instante).",
+            {"name": "cerebro_guardar",
+             "description": "Guarda lo aprendido en MiCerebro (queda promovido y buscable al instante).",
              "parameters": {"type": "object", "properties": {
                  "tipo": {"type": "string", "enum": list(_tipos())}, "titulo": {"type": "string"},
                  "cuerpo": {"type": "string"}}, "required": ["tipo", "titulo", "cuerpo"],
@@ -415,14 +415,14 @@ class EnchufeMemoryProvider(MemoryProvider):
     def handle_tool_call(self, tool_name: str, args: dict[str, Any], **kwargs) -> str:
         try:
             args = args or {}
-            if tool_name == "okf_buscar":
-                return json.dumps({"resultado": _run_okf_buscar(str(args.get("pregunta", "")))}, ensure_ascii=False)
-            if tool_name == "okf_guardar":
+            if tool_name == "cerebro_buscar":
+                return json.dumps({"resultado": _run_cerebro_buscar(str(args.get("pregunta", "")))}, ensure_ascii=False)
+            if tool_name == "cerebro_guardar":
                 tipo = str(args.get("tipo", ""))
                 if tipo not in _tipos():
                     return json.dumps({"error": f"tipo inválido: {tipo}"}, ensure_ascii=False)
                 cuerpo = f"{str(args.get('cuerpo', '')).strip()}\n\norigen: hermes/{self._perfil or 'default'}"
-                return json.dumps({"resultado": _run_okf_guardar(tipo, str(args.get("titulo", "")), cuerpo)},
+                return json.dumps({"resultado": _run_cerebro_guardar(tipo, str(args.get("titulo", "")), cuerpo)},
                                   ensure_ascii=False)
             if tool_name == "gbrain_query":
                 g = self._gbrain()
@@ -461,7 +461,7 @@ class EnchufeMemoryProvider(MemoryProvider):
                 self._push_pending(item)
 
     def _escribir(self, item: dict, timeout: float | None = None) -> None:
-        _run_okf_guardar(item["tipo"], item["titulo"], item["cuerpo"], timeout or _GUARDAR_TIMEOUT)
+        _run_cerebro_guardar(item["tipo"], item["titulo"], item["cuerpo"], timeout or _GUARDAR_TIMEOUT)
 
     # -- cola de pendientes (jsonl en hermes_home; memoria si no hay home) ----
 
@@ -520,7 +520,7 @@ class EnchufeMemoryProvider(MemoryProvider):
             try:
                 self._escribir(it, min(_GUARDAR_TIMEOUT, resto))
             except Exception:  # noqa: BLE001
-                # okf caído: no insistir con el resto
+                # MiCerebro caído: no insistir con el resto
                 fallidos += items[i:]
                 break
         for it in fallidos:

@@ -1,5 +1,5 @@
-// Tests de okf-migrar: origen y cerebro en temporales; se comprueba que el origen no cambia.
-// Uso: node --test okf-migrar.test.mjs
+// Tests de cerebro-migrar: origen y cerebro en temporales; se comprueba que el origen no cambia.
+// Uso: node --test cerebro-migrar.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -8,11 +8,11 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { partirLibreta, slug, MAPA_TIPOS, limpiarDescripcion } from './okf-migrar.mjs';
-import { parseFrontmatter } from './okf-comun.mjs';
+import { partirLibreta, slug, MAPA_TIPOS, limpiarDescripcion } from './cerebro-migrar.mjs';
+import { parseFrontmatter } from './cerebro-comun.mjs';
 
 const aqui = path.dirname(fileURLToPath(import.meta.url));
-const migrar = path.join(aqui, 'okf-migrar.mjs');
+const migrar = path.join(aqui, 'cerebro-migrar.mjs');
 
 function escribir(base, rel, texto) {
   const f = path.join(base, rel);
@@ -35,7 +35,7 @@ function huellas(dir) {
 
 // Cerebro con el flujo antiguo: las notas sin carpeta propia caen en borradores/ para el revisor.
 function modoBorrador(root) {
-  escribir(root, 'okf.config.json', '{"guardar":{"modo":"borrador"}}');
+  escribir(root, 'cerebro.config.json', '{"guardar":{"modo":"borrador"}}');
 }
 
 function ejecutar(args) {
@@ -44,7 +44,7 @@ function ejecutar(args) {
 }
 
 function escenario() {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'okf-migrar-'));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'cerebro-migrar-'));
   const root = path.join(base, 'cerebro');
   fs.mkdirSync(root);
   const libreta = path.join(base, 'libreta');

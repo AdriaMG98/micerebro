@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-// okf-programar — programa el revisor de borradores (okf-revisor.mjs) para que corra cada hora.
+// cerebro-programar — programa el revisor de borradores (cerebro-revisor.mjs) para que corra cada hora.
 // Cero dependencias externas: solo módulos internos de Node.
 //
-// Uso: node okf-programar.mjs [--estado | --aplicar | --quitar] [--dry-run] [--forzar] [--root <ruta>]
-// Raíz: --root > OKF_ROOT > okf.config.json hacia arriba desde el cwd > cwd.
+// Uso: node cerebro-programar.mjs [--estado | --aplicar | --quitar] [--dry-run] [--forzar] [--root <ruta>]
+// Raíz: --root > CEREBRO_ROOT > cerebro.config.json hacia arriba desde el cwd > cwd.
 //
-// Un programador por usuario y máquina (nombre fijo `okf-revisor`): aplicar con otra raíz
+// Un programador por usuario y máquina (nombre fijo `cerebro-revisor`): aplicar con otra raíz
 // sustituye a la anterior. Es lo que quiere un alumno con un solo cerebro; con varios,
 // se encadenan las raíces en un script propio.
-//   Windows  tarea `schtasks` `okf-revisor`, cada hora, lanzada por un .vbs mudo (sin ventana).
-//   macOS    LaunchAgent `io.github.adriamg98.okf-revisor` (StartInterval 3600 + RunAtLoad).
-//   Linux    units de usuario okf-revisor.{service,timer} generadas desde las de ../systemd/.
+//   Windows  tarea `schtasks` `cerebro-revisor`, cada hora, lanzada por un .vbs mudo (sin ventana).
+//   macOS    LaunchAgent `io.github.adriamg98.cerebro-revisor` (StartInterval 3600 + RunAtLoad).
+//   Linux    units de usuario cerebro-revisor.{service,timer} generadas desde las de ../systemd/.
 // Todo lo que toca el sistema pasa por el objeto `sistema` (inyectable): los tests lo simulan.
 'use strict';
 
@@ -19,14 +19,14 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { defaultRoot } from './okf-comun.mjs';
+import { defaultRoot } from './cerebro-comun.mjs';
 
-export const NOMBRE = 'okf-revisor';
-export const ETIQUETA_MAC = 'io.github.adriamg98.okf-revisor';
+export const NOMBRE = 'cerebro-revisor';
+export const ETIQUETA_MAC = 'io.github.adriamg98.cerebro-revisor';
 
 // Marca que llevan TODOS los artefactos que crea este script. Sin ella, un fichero, tarea o plist
 // con el mismo nombre es de otra persona (o de otra herramienta): no se pisa ni se borra sin --forzar.
-export const MARCA = 'Generado por okf-programar.mjs';
+export const MARCA = 'Generado por cerebro-programar.mjs';
 
 // .vbs por máquina, con node y el revisor escritos dentro (así /TR solo lleva la raíz y cabe en
 // 261 caracteres). Se guarda en UTF-16LE con BOM, que WSH lee bien: sirve aunque node o el
@@ -51,7 +51,7 @@ export function sistemaReal() {
     home: os.homedir(),
     uid: typeof process.getuid === 'function' ? process.getuid() : 0,
     node: process.execPath,
-    revisor: path.join(aqui, 'okf-revisor.mjs'),
+    revisor: path.join(aqui, 'cerebro-revisor.mjs'),
     plantillasDir: path.join(aqui, '..', 'systemd'),
     consultar(cmd, args) { return this.ejecutar(cmd, args); }, // solo lectura: el ensayo la deja real
     ejecutar(cmd, args) {
@@ -105,7 +105,7 @@ function dueno(sis, ruta, forzar, verbo) {
   if (!enlace && !sis.existe(ruta)) return false;
   if (!enlace && String(sis.leer(ruta)).includes(MARCA)) return true;
   if (forzar) return 'ajeno';
-  throw new Error(`${ruta} ya existe y no lo creó okf-programar (${enlace ? 'es un enlace simbólico' : `no lleva la marca «${MARCA}»`}). No lo ${verbo}. Muévelo o bórralo tú, o repite con --forzar si de verdad quieres sustituirlo.`);
+  throw new Error(`${ruta} ya existe y no lo creó cerebro-programar (${enlace ? 'es un enlace simbólico' : `no lleva la marca «${MARCA}»`}). No lo ${verbo}. Muévelo o bórralo tú, o repite con --forzar si de verdad quieres sustituirlo.`);
 }
 
 // Escribe un artefacto nuestro; si había uno ajeno (con --forzar) se quita antes, para no escribir a través de un symlink.
@@ -124,7 +124,7 @@ const sdExec = (s) => sd(s).replace(/\$/g, () => '$$');
 function rutasWindows(sis) {
   const w = path.win32;
   const dir = w.join(sis.home, 'AppData', 'Local', NOMBRE);
-  return { dir, vbs: w.join(dir, 'okf-revisor.vbs') };
+  return { dir, vbs: w.join(dir, 'cerebro-revisor.vbs') };
 }
 
 // La tarea es nuestra si su acción apunta a nuestro .vbs. false = no existe.
@@ -143,7 +143,7 @@ function aplicarWindows(sis, root, forzar) {
   // /TR admite como mucho 261 caracteres: mejor avisar que dejar una tarea cortada.
   if (tr.length > 261) throw new Error(`la línea de la tarea mide ${tr.length} caracteres y schtasks admite 261: usa una ruta más corta`);
   if (tareaNuestra(sis, ruta) === 'ajena' && !forzar) {
-    throw new Error(`Ya hay una tarea programada llamada ${NOMBRE} que no creó okf-programar (su acción no usa ${ruta}). No la piso. Bórrala tú (schtasks /Delete /TN ${NOMBRE}) o repite con --forzar.`);
+    throw new Error(`Ya hay una tarea programada llamada ${NOMBRE} que no creó cerebro-programar (su acción no usa ${ruta}). No la piso. Bórrala tú (schtasks /Delete /TN ${NOMBRE}) o repite con --forzar.`);
   }
   poner(sis, ruta, vbs(sis.node, sis.revisor), forzar, { utf16le: true });
   const r = sis.ejecutar('schtasks', ['/Create', '/TN', NOMBRE, '/SC', 'HOURLY', '/MO', '1', '/TR', tr, '/F']);
@@ -156,7 +156,7 @@ function quitarWindows(sis, root, forzar) {
   const tarea = tareaNuestra(sis, ruta);
   const fichero = dueno(sis, ruta, forzar, 'borro');
   if (tarea === 'ajena' && !forzar) {
-    throw new Error(`La tarea ${NOMBRE} existe pero no la creó okf-programar. No la borro. Bórrala tú (schtasks /Delete /TN ${NOMBRE}) o repite con --forzar.`);
+    throw new Error(`La tarea ${NOMBRE} existe pero no la creó cerebro-programar. No la borro. Bórrala tú (schtasks /Delete /TN ${NOMBRE}) o repite con --forzar.`);
   }
   if (tarea) sis.ejecutar('schtasks', ['/Delete', '/TN', NOMBRE, '/F']);
   if (fichero) { sis.borrar(ruta); sis.borrarDir(dir); }
@@ -165,7 +165,7 @@ function quitarWindows(sis, root, forzar) {
 
 function estadoWindows(sis) {
   const { vbs: ruta } = rutasWindows(sis);
-  if (tareaNuestra(sis, ruta) === 'ajena') return sis.imprimir(`Hay una tarea ${NOMBRE} que NO es de okf-programar.`);
+  if (tareaNuestra(sis, ruta) === 'ajena') return sis.imprimir(`Hay una tarea ${NOMBRE} que NO es de cerebro-programar.`);
   const r = sis.ejecutar('schtasks', ['/Query', '/TN', NOMBRE, '/FO', 'LIST', '/V']);
   if (r.status !== 0) return sis.imprimir(`No programado: no existe la tarea ${NOMBRE}.`);
   sis.imprimir(`Programado: tarea ${NOMBRE}.`);
@@ -180,7 +180,7 @@ function rutasMac(sis, root) {
   const m = path.posix;
   const plist = m.join(sis.home, 'Library', 'LaunchAgents', `${ETIQUETA_MAC}.plist`);
   const registro = m.join(root, 'registro');
-  const log = sis.existe(registro) ? m.join(registro, 'okf-revisor.log') : m.join(sis.home, 'Library', 'Logs', 'okf-revisor.log');
+  const log = sis.existe(registro) ? m.join(registro, 'cerebro-revisor.log') : m.join(sis.home, 'Library', 'Logs', 'cerebro-revisor.log');
   return { plist, log };
 }
 
@@ -256,13 +256,13 @@ function rutasLinux(sis) {
 // Parte de las units de systemd/ y solo sustituye las dos líneas que dependen de la máquina.
 function unitsLinux(sis, root) {
   const plantilla = (n) => sis.leer(path.join(sis.plantillasDir, n));
-  const servicio = plantilla('okf-revisor.service').split('\n').map((l) => {
-    if (l.startsWith('Environment=OKF_ROOT=')) return `Environment=${sd(`OKF_ROOT=${root}`)}`;
+  const servicio = plantilla('cerebro-revisor.service').split('\n').map((l) => {
+    if (l.startsWith('Environment=CEREBRO_ROOT=')) return `Environment=${sd(`CEREBRO_ROOT=${root}`)}`;
     if (l.startsWith('ExecStart=')) return `ExecStart=${sdExec(sis.node)} ${sdExec(sis.revisor)} --root ${sdExec(root)}`;
     if (l.startsWith('# Ajusta las dos rutas')) return `# ${MARCA}: vuelve a ejecutarlo para cambiarlo.`;
     return l;
   }).join('\n');
-  return { servicio, timer: `# ${MARCA}\n${plantilla('okf-revisor.timer')}` };
+  return { servicio, timer: `# ${MARCA}\n${plantilla('cerebro-revisor.timer')}` };
 }
 
 function aplicarLinux(sis, root, forzar) {
@@ -294,7 +294,7 @@ function quitarLinux(sis, root, forzar) {
 function estadoLinux(sis) {
   const r = rutasLinux(sis);
   if (!sis.existe(r.timer) && !sis.esSymlink(r.timer)) return sis.imprimir(`No programado: no existe ${r.timer}.`);
-  if (dueno(sis, r.timer, true, '') !== true) return sis.imprimir(`Hay un ${NOMBRE}.timer que NO es de okf-programar (${r.timer}).`);
+  if (dueno(sis, r.timer, true, '') !== true) return sis.imprimir(`Hay un ${NOMBRE}.timer que NO es de cerebro-programar (${r.timer}).`);
   const ac = sis.ejecutar('systemctl', ['--user', 'is-active', `${NOMBRE}.timer`]);
   sis.imprimir(`${ac.stdout.trim() === 'active' ? 'Programado' : 'Units escritas pero timer inactivo'}: ${NOMBRE}.timer.`);
   const t = sis.ejecutar('systemctl', ['--user', 'list-timers', `${NOMBRE}.timer`, '--no-pager']);
@@ -332,7 +332,7 @@ function parseArgs(argv) {
 function main() {
   const { flags, root: rootArg } = parseArgs(process.argv.slice(2));
   if (flags.has('-h') || flags.has('--help')) {
-    console.log('Uso: node okf-programar.mjs [--estado | --aplicar | --quitar] [--dry-run] [--forzar] [--root <ruta>]\n  --forzar sustituye lo ajeno (sin la marca del script). Programa el revisor para que corra cada hora (schtasks / launchd / systemd de usuario).');
+    console.log('Uso: node cerebro-programar.mjs [--estado | --aplicar | --quitar] [--dry-run] [--forzar] [--root <ruta>]\n  --forzar sustituye lo ajeno (sin la marca del script). Programa el revisor para que corra cada hora (schtasks / launchd / systemd de usuario).');
     return;
   }
   const acciones = ['--aplicar', '--quitar', '--estado'].filter((f) => flags.has(f));
@@ -344,7 +344,7 @@ function main() {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { main(); } catch (error) {
-    console.error(`OKF programar error: ${error.message}`);
+    console.error(`MiCerebro programar error: ${error.message}`);
     process.exitCode = 1;
   }
 }

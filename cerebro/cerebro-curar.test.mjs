@@ -1,5 +1,5 @@
-// Tests de `okf curar --candidatos`: tres casos sembrados (duplicada, caducada, enlace roto).
-// Uso: node --test okf-curar.test.mjs
+// Tests de `cerebro curar --candidatos`: tres casos sembrados (duplicada, caducada, enlace roto).
+// Uso: node --test cerebro-curar.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-const okf = path.join(path.dirname(fileURLToPath(import.meta.url)), 'okf.mjs');
+const cerebroCli = path.join(path.dirname(fileURLToPath(import.meta.url)), 'cerebro.mjs');
 const hoy = new Date().toISOString().slice(0, 10);
 const haceDiezDias = new Date(Date.now() - 10 * 86400000).toISOString().slice(0, 10);
 
@@ -21,8 +21,8 @@ function escribir(root, rel, texto) {
 const ficha = (tipo, titulo, desc, fecha, cuerpo = 'Cuerpo.') => `---\ntype: ${tipo}\ntitle: "${titulo}"\ndescription: "${desc}"\nstatus: stable\nactualizado: ${fecha}\n---\n\n${cuerpo}\n`;
 
 function cerebro() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'okf-curar-'));
-  escribir(root, 'okf.config.json', '{}');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cerebro-curar-'));
+  escribir(root, 'cerebro.config.json', '{}');
   // par duplicado (misma fecha)
   escribir(root, 'memoria/a-regar.md', ficha('aprendizaje', 'Regar los tomates por la mañana', 'Regar tomates por la mañana evita el moho', hoy));
   escribir(root, 'memoria/b-regar.md', ficha('aprendizaje', 'Regar tomates por la mañana', 'Los tomates se riegan por la mañana para evitar moho', hoy));
@@ -40,7 +40,7 @@ function cerebro() {
 }
 
 function curar(root, ...extra) {
-  const r = spawnSync(process.execPath, [okf, 'curar', '--candidatos', ...extra, '--root', root], { encoding: 'utf8' });
+  const r = spawnSync(process.execPath, [cerebroCli, 'curar', '--candidatos', ...extra, '--root', root], { encoding: 'utf8' });
   return { out: r.stdout, err: r.stderr, status: r.status };
 }
 
@@ -80,15 +80,15 @@ test('curar --candidatos legible y sin candidatas: «Nada que revisar»', () => 
   assert.match(r.out, /\[caducada\] memoria\/vieja\.md/);
   assert.match(r.out, /\[enlace-roto\] memoria\/enlaza\.md/);
   assert.match(r.out, /Total: 1 duplicadas, 1 contradicciones, 1 caducadas, 1 enlaces rotos\./);
-  const limpio = fs.mkdtempSync(path.join(os.tmpdir(), 'okf-curar-'));
-  escribir(limpio, 'okf.config.json', '{}');
+  const limpio = fs.mkdtempSync(path.join(os.tmpdir(), 'cerebro-curar-'));
+  escribir(limpio, 'cerebro.config.json', '{}');
   escribir(limpio, 'memoria/solo.md', ficha('nota', 'Una sola', 'Nota única y reciente', hoy));
   assert.match(curar(limpio).out, /Nada que revisar/);
   assert.deepEqual(JSON.parse(curar(limpio, '--json').out), []);
 });
 
 test('curar sin --candidatos da el uso', () => {
-  const r = spawnSync(process.execPath, [okf, 'curar', '--root', cerebro()], { encoding: 'utf8' });
+  const r = spawnSync(process.execPath, [cerebroCli, 'curar', '--root', cerebro()], { encoding: 'utf8' });
   assert.notEqual(r.status, 0);
-  assert.match(r.stderr, /uso: okf curar --candidatos/);
+  assert.match(r.stderr, /uso: cerebro curar --candidatos/);
 });
