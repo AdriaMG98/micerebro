@@ -320,7 +320,7 @@ python3 -m pytest hermes-enchufe/tests -q    # plugin (necesita pytest; usa un s
 
 ## Sobre el formato
 
-La estructura (carpetas con `index.md`, `log.md`, fichas YAML sobre Markdown, `cerebro_version` en el
+La estructura (carpetas con `index.md`, `log.md`, fichas YAML sobre Markdown, `okf_version` en el
 índice raíz) sigue el espíritu del **Open Knowledge Format** (OKF), una especificación abierta
 de Google Cloud Platform: <https://github.com/GoogleCloudPlatform/open-knowledge-format>. Este
 repositorio es una implementación independiente y no incluye texto ni código de esa especificación;

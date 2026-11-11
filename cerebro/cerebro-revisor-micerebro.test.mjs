@@ -28,7 +28,7 @@ function borrador(tipo, titulo, desc, cuerpo = 'Cuerpo con tildes: acción, niñ
 // Cerebro del kit: index/log de la raíz y el index con marcador «Vacío por ahora» de decisiones.
 function cerebro() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cerebro-revisor-kit-'));
-  escribir(root, 'index.md', '---\ncerebro_version: 0.2\n---\n# MiCerebro\n');
+  escribir(root, 'index.md', '---\nokf_version: 0.2\n---\n# MiCerebro\n');
   escribir(root, 'log.md', '# Log\n\n## 2026-11-07\n\n* **Cambio**: algo anterior.\n');
   escribir(root, 'memoria/decisiones/index.md', '# Decisiones\n\nUna nota por decisión.\n\n(Vacío por ahora. Aquí se listan las notas.)\n');
   escribir(root, 'memoria/borradores/dec.md', borrador('decision', 'Elegir cafetera exprés', 'Compramos una cafetera italiana: acción decidida'));

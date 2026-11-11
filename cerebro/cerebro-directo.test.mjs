@@ -20,7 +20,7 @@ const hoy = new Date().toISOString().slice(0, 10);
 function cerebro(config = '{}') {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cerebro-directo-'));
   fs.writeFileSync(path.join(root, 'cerebro.config.json'), config);
-  fs.writeFileSync(path.join(root, 'index.md'), '---\ncerebro_version: 0.2\n---\n# MiCerebro\n');
+  fs.writeFileSync(path.join(root, 'index.md'), '---\nokf_version: 0.2\n---\n# MiCerebro\n');
   return root;
 }
 

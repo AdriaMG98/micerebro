@@ -25,7 +25,7 @@ function ficha(tipo, titulo, desc, cuerpo) {
 
 function cerebro(extra = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cerebro-micerebro-'));
-  escribir(root, 'index.md', '---\ncerebro_version: 0.2\n---\n# MiCerebro\n');
+  escribir(root, 'index.md', '---\nokf_version: 0.2\n---\n# MiCerebro\n');
   escribir(root, 'memoria/decisiones/2026-10-01-elegir-cafetera.md', ficha('decision', 'Elegir cafetera', 'Compramos una cafetera italiana de acero', 'Decidimos la cafetera italiana por durabilidad.'));
   escribir(root, 'memoria/decisiones/index.md', '# Decisiones\n\n* [Elegir cafetera](2026-10-01-elegir-cafetera.md) - Cafetera italiana descrita en el índice\n');
   escribir(root, 'memoria/aprendizajes/2026-10-02-tomates.md', ficha('aprendizaje', 'Tomates en maceta', 'Los tomates necesitan sol directo', 'Riego por la mañana.'));
